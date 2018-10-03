@@ -54,40 +54,28 @@ def clipBySelectLocation(fc):
                                            invert_spatial_relationship='INVERT')
     arcpy.DeleteFeatures_management(tempLayer)  # Delete everything outside the quad
 
-def copyOnlyNeeded(inputFDSFullPath,exportFDSFullPath,exportFDSFullPathNew,prefixInitials,inputPrefixLength,CoreFCs,Annos):
+def copyOnlyNeeded(inputFDSFullPath,exportFDSFullPath,exportFDSFullPathNew,inputPrefixLength,listCoreFCs):
     arcpy.env.workspace = inputFDSFullPath
     print("Workspace is: " + arcpy.env.workspace)
     listFCsInInput = arcpy.ListFeatureClasses("*")
-
     arcpy.env.workspace = exportFDSFullPath
     print("Workspace is: " + arcpy.env.workspace)
     listToRename = []
-    for FCInInput in listFCsInInput:
-        fullFileName = NCGMPname(FCInInput.split(".")[-1],inputPrefixLength)[0]
+    for fcInInput in listFCsInInput:
+        genericFileName = NCGMPname(fcInInput.split(".")[-1],inputPrefixLength)[0]
         print(" ####################")
-        print("     Part: "+fullFileName)
-        print("     FCInInput: " + FCInInput)
-        if fullFileName in CoreFCs:
-            importPath = inputFDSFullPath+ "\\"+ FCInInput
-            exportDestination = exportFDSFullPath + "\\" + FCInInput.split(".")[-1] #Export has initials
+        print("     Part: "+genericFileName)
+        print("     fcInInput: " + fcInInput)
+        if genericFileName in listCoreFCs:
+            importPath = inputFDSFullPath+ "\\"+ fcInInput
+            exportDestination = exportFDSFullPath + "\\" + fcInInput.split(".")[-1] #Export has initials
             print("     Import Path: " + importPath)
             print("     Check if exists: "+str(arcpy.Exists(importPath)))
             print("     Export Destintion: "+exportDestination)
-            print("  Copying: " + FCInInput)
-            arcpy.Copy_management(inputFDSFullPath+ "\\"+ FCInInput, exportDestination)
-        elif fullFileName in Annos:
-            print("  Annos to rename: " + fullFileName)
-            listToRename.append(fullFileName)
+            print("  Copying: " + fcInInput)
+            arcpy.Copy_management(inputFDSFullPath+ "\\"+ fcInInput, exportDestination)
         else:
-            print("  Skipping: " + FCInInput)
-
-    # # rename the FCs with feature linked anno
-    # for FCToRename in listToRename:
-    #     print ("  Renaming: " + FCToRename)
-    #     arcpy.Rename_management(in_data=exportFDSFullPath + "\\" + prefixInitials + FCToRename,
-    #                             out_data=exportFDSFullPath + "\\" + FCToRename)
-    # Rename the FDS
-
+            print("  Skipping: " + fcInInput)
     arcpy.Rename_management(in_data=exportFDSFullPath,
                             out_data=exportFDSFullPathNew)
     print("Renaming FDS to: " + exportFDSFullPathNew)
@@ -105,9 +93,9 @@ mainLineFileName = "ContactsAndFaults"
 
 makeTables = True
 #Input FC list and field list of lists must be in the same order
-FCsForTables = ["CartographicLines","ContactsAndFaults","GeomorphLines","MapUnitPoints","MapUnitPolys","OrientationPoints","MapUnitLines"]
-fieldsForTables = [['type'],['type'],['type'],['mapunit'],['mapunit'],['type','stationid','azimuth','inclination','locationsourceid','datasourceid'],['mapunit']]
-print("Length of FieldsForTables : " +str(len(fieldsForTables)))
+listFCsForTables = ["CartographicLines","ContactsAndFaults","GeomorphLines","MapUnitPoints","MapUnitPolys","OrientationPoints","MapUnitLines"]
+listFieldsForTables = [['type'],['type'],['type'],['mapunit'],['mapunit'],['type','stationid','azimuth','inclination','locationsourceid','datasourceid'],['mapunit']]
+print("Length of FieldsForTables : " +str(len(listFieldsForTables)))
 
 dropFields = True
 listFCsToDropFldsFrom = ['CartographicLines',
@@ -135,29 +123,29 @@ listFiledToDrop = [['symbol','label','datasourceid','notes','creator','createdat
 #Input files
 inputSDE = r"Database Connections\Connection to igswzcwggsmoki.wr.usgs.gov_LOCOGEO_RCROW.sde"
 inputFDSName="locogeo.sde.PKHGeologicMap"
-inputPrefixLength = 3
+inputPrefixLength = 3 #All FCs and FDS in the import should have the same prefix (or atleast the same prefix length)
 inputFDSFullPath = inputSDE + "\\" + inputFDSName
 print("FDS to be copied: "+inputFDSFullPath)
-inquad = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\LOCOBigBrother\LOCOBigBrother.gdb\Focus_PKH"
+inquad = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\LOCOBigBrother\LOCOBigBrother.gdb\Focus_PKH" #Will look for polygons with 'yes' in the 'Build' attribute
 
 #######################################################################################################################
 #Input lists
 #These feature classes with be "clipped" to the quad boundary with clip
-FCsToClip = ['CartographicLines','ContactsAndFaults','GeomorphLines','MapUnitLines']
+listFCsToClip = ['CartographicLines','ContactsAndFaults','GeomorphLines','MapUnitLines']
 #These feature classes with be "clipped" to the quad boundary using a select by location
-FCsToSelectionByLocation = ['MapUnitPoints','OrientationPoints']
-#These are the feature classes that will NOT be ignored
-CoreFCs = FCsToClip + FCsToSelectionByLocation
-#CoreFCs = FCsToSelectionByLocation  # TODO remove just for testing to speed things up
+listFCsToSelectionByLocation = ['MapUnitPoints','OrientationPoints']
 #Annos
-Annos = ['MapUnitPointsAnno24k','OrientationPointsAnno24k']
+listAnnos = ['MapUnitPointsAnno24k','OrientationPointsAnno24k']
 
-FCsToRename = FCsToSelectionByLocation + Annos #TODO renaming might not be needed anymore
+#These are the feature classes that will NOT be ignored
+listCoreFCs = listFCsToClip + listFCsToSelectionByLocation
+listFCsToRename = listFCsToSelectionByLocation + listAnnos #These are not renamed during the select by location process
 
 #######################################################################################################################
 #Export destinations
 exportFolder = r"\\igswzcwwgsrio\loco\Team\Crow\_TestingSandbox\MapExtractor"
-exportPrefix = "OptTest_"
+exportGDBPrefix = "OptTest_"
+exportFDSPrefix = "Test_"
 
 #######################################################################################################################
 #Some Naming stuff
@@ -172,7 +160,7 @@ timeDateString = datetimePrint()[0] # Gets time and date to add to export
 print("Current Run: " + timeDateString)
 
 #Export names and proj
-exportGDBName = exportPrefix + timeDateString
+exportGDBName = exportGDBPrefix + timeDateString
 spatialref = arcpy.Describe(inputFDSFullPath).spatialReference
 
 exportGDBFullPath = exportFolder + "\\" + exportGDBName + ".gdb"
@@ -188,15 +176,13 @@ arcpy.CreateFeatureDataset_management(out_dataset_path=exportGDBFullPath,
 exportFDSFullPath = exportGDBFullPath + "\\" + inputCoreFDSName
 print("Created a new FDS at: "+exportFDSFullPath)
 
-exportFDSFullPathNew = exportGDBFullPath + "\\" + inputFDSNameWOInitials
+exportFDSFullPathNew = exportGDBFullPath + "\\" + exportFDSPrefix + inputFDSNameWOInitials
 
 copyOnlyNeeded(inputFDSFullPath,
                exportFDSFullPath,
                exportFDSFullPathNew,
-               prefixInitials,
                inputPrefixLength,
-               CoreFCs,
-               Annos)
+               listCoreFCs)
 
 #######################################################################################################################
 #Get the quads of interest from the FOCUS area feature class
@@ -224,28 +210,26 @@ arcpy.Copy_management(quad,
 #######################################################################################################################
 #Make lists of stuff
 arcpy.env.workspace = exportFDSFullPathNew
-fcList = arcpy.ListFeatureClasses("*", "All")
-listLength = len(fcList)
-print(fcList)
-fcList.remove("selectedQuad") #Don't clip the quad with the quad
+listFCsInExportDB = arcpy.ListFeatureClasses("*", "All")
+listLength = len(listFCsInExportDB)
+print(listFCsInExportDB)
+listFCsInExportDB.remove("selectedQuad") #Don't clip the quad with the quad
 
 #######################################################################################################################
 #Clipping Everything
 print("Clipping the FCs...")
 # Cycle through all the feature classes
-for fc in fcList:
-    fcPath = arcpy.env.workspace + "\\" + fc  # Get the full path
+for fcInExportDB in listFCsInExportDB:
+    fcPath = arcpy.env.workspace + "\\" + fcInExportDB  # Get the full path
     print(" ####################")
     print("    Feature class full path: " + fcPath)
-    fcName = NCGMPname(fc,inputPrefixLength)[0] #Truncates initial at start of name
+    fcName = NCGMPname(fcInExportDB,inputPrefixLength)[0] #Truncates initial at start of name
     print("    Feature class name: " + fcName)
     if fcName == "ContactsAndFaults":
         fcExportPath = exportFDSFullPathNew+"\\"+fcName+"_temp" #ContactsAndFaults temp till quad added
-    # elif fc == "CartographicLines":
-    #     fcExportPath = exportFDSFullPathNew + "\\" + fcName + "_temp"  # ContactsAndFaults temp till option merging with extra lines
     else:
         fcExportPath = exportFDSFullPathNew + "\\" + fcName
-    if fcName in FCsToClip: #if in clip array
+    if fcName in listFCsToClip: #if in clip array
         print("    Using Clip")
         arcpy.Clip_analysis(
             in_features=fcPath,
@@ -258,38 +242,36 @@ for fc in fcList:
             quadLine = exportFDSFullPathNew + "\\" + "quadLines"
             # Convert the polys to lines
             arcpy.FeatureToLine_management(quad, quadLine)
-
             # This will change the type of everything in the FC to 31.08
             with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
                 for row in cursor:
                     row[0] = '31.08' #Map neatline
                     cursor.updateRow(row)
             arcpy.Merge_management([fcExportPath, quadLine],
-                                   exportFDSFullPathNew + "\\" + "ContactsAndFaults")
-            checkAndDelete(fcExportPath) #Bcz temp name
-        # elif fcName == "CartographicLines":
-        #     arcpy.Merge_management([fcExportPath],
-        #                            exportFDSFullPathNew + "\\" + "CartographicLines")
-        #     checkAndDelete(fcExportPath)  # Bcz temp name
+                                   exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2")
+            if removeMultiParts:
+                arcpy.MultipartToSinglepart_management(
+                    in_features=exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2",
+                    out_feature_class=exportFDSFullPathNew + "\\" + "ContactsAndFaults")
+            else:
+                arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2",
+                                              exportFDSFullPathNew + "\\" + "ContactsAndFaults")
+            checkAndDelete(exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2")
+            checkAndDelete(fcExportPath)  # Bcz temp name
         checkAndDelete(fcPath)
-    elif fcName in FCsToSelectionByLocation:
+    elif fcName in listFCsToSelectionByLocation:
         print("    Doing a select by location")
-        # extraPointsTempName = "TempPointsExtra"
-        # extraPointsTemp = exportFDSFullPath + "\\" + "XXX" + extraPointsTempName
-        # extraPointsTempAfterClip = exportFDSFullPathNew + "\\" + extraPointsTempName
         clipBySelectLocation(exportFDSFullPathNew + "\\" + prefixInitials + fcName)
     else:
-        #FCsToSelectionByLocation and FCsToCLip together should be the same as just CoreFCs
         print("    Ignoring: " + fcName)
-
 
 #######################################################################################################################
 #rename the feature classes with feature linked anno
-print(FCsToRename)
-for fc in FCsToRename:
-    print ("Renaming: " + fc)
-    arcpy.Rename_management(in_data=exportFDSFullPathNew + "\\" + prefixInitials + fc,
-                              out_data=exportFDSFullPathNew + "\\" + fc)
+print(listFCsToRename)
+for fcToRename in listFCsToRename:
+    print ("Renaming: " + fcToRename)
+    arcpy.Rename_management(in_data=exportFDSFullPathNew + "\\" + prefixInitials + fcToRename,
+                              out_data=exportFDSFullPathNew + "\\" + fcToRename)
 
 #######################################################################################################################
 if buildPolygons:
@@ -338,26 +320,26 @@ if makeTopology:
     print("Topology done")
 
 if makeTables:
-    for i, file in enumerate(FCsForTables):
-        fullPathFC = exportFDSFullPathNew + "\\" + file
+    for i, fcForTable in enumerate(listFCsForTables):
+        fullPathFC = exportFDSFullPathNew + "\\" + fcForTable
         print(fullPathFC)
-        for field in fieldsForTables[i]:
+        for field in listFieldsForTables[i]:
             print(field)
-            fullPathTable = exportGDBFullPath + "\\" + file + "_" + field
+            fullPathTable = exportGDBFullPath + "\\" + fcForTable + "_" + field
             arcpy.Frequency_analysis(fullPathFC,
                                      fullPathTable,
                                      field)
 
 if dropFields:
-    for x, fc in enumerate(listFCsToDropFldsFrom):
-        print(fc)
-        fcFullPath = exportFDSFullPathNew + "\\" + fc
+    for x, fcToDrop in enumerate(listFCsToDropFldsFrom):
+        print(fcToDrop)
+        fcFullPath = exportFDSFullPathNew + "\\" + fcToDrop
         print("  " + fcFullPath)
         print("  Disabling Editor Tracking")
         # Disable editor tracking for all feature classes, otherwise you can't delete those fields
         arcpy.DisableEditorTracking_management(fcFullPath, "DISABLE_CREATOR", "DISABLE_CREATION_DATE",
                                                "DISABLE_LAST_EDITOR", "DISABLE_LAST_EDIT_DATE")
-        print("  Removing fields from: " + fc )
+        print("  Removing fields from: " + fcToDrop )
         arcpy.DeleteField_management(fcFullPath, listFiledToDrop[x])
 
 arcpy.env.overwriteOutput = False
