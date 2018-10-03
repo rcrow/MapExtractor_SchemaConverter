@@ -105,19 +105,31 @@ listFCsToDropFldsFrom = ['CartographicLines',
                          'MapUnitPolys',
                          'OrientationPoints']
 #This list of lists needs to be in the same order and the above list of FCs!
-listFiledToDrop = [['symbol','label','datasourceid','notes','creator','createdate','editor','editdate','datasourcenotes'],# #1
+listFiledToDrop = [['symbol','label','datasourceid','notes','creator','createdate','editor','editdate','datasourcenotes'],#1
                    ['isconcealed','existenceconfidence','identityconfidence','locationconfidencemeters','symbol',
                          'label','datasourceid','notes','creator','createdate','editor','editdate','datasourcenotes',
-                         'checkby','checknotes','validsmall','FID_selectedQuad','FID_TempQuad','Name','Active','Build'],# #2
+                         'checkby','checknotes','validsmall','FID_selectedQuad','FID_TempQuad','Name','Active','Build'],#2
                    ['isconcealed','existenceconfidence','identityconfidence','locationconfidencemeters','symbol',
-                        'label','datasourceid','notes','creator','createdate','editor','editdate','datasourcenotes'],# #3
+                        'label','datasourceid','notes','creator','createdate','editor','editdate','datasourcenotes'],#3
                    ['identityconfidence','label','symbol','notes','datasourceid','mapunit2','origunit','creator',
-                       'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],# #4
+                       'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],#4
                    ['identityconfidence','label','symbol','notes','datasourceid','mapunit2','origunit','creator',
-                         'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],# #5
+                         'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],#5
                    ['mapunit','symbol','label','plotatscale','locationconfidencemeters','identityconfidence',
-                      'orientationconfidencedegrees','notes','creator','createdate','editor','editdate','datasourcenotes',# #6
+                      'orientationconfidencedegrees','notes','creator','createdate','editor','editdate','datasourcenotes',#6
                       'mapunit2','origunit','facies']]
+
+addExtraTable = True
+inputExtraTablePathGDB = r"\\Igswzcwwgsrio\loco\Team\Felger\ActiveMaps\CastleRock24k_USGS\GIS\CR24k_PostPubsReview\CR24k_Extract_20180809\CastleRock24k_20180809_1254_06.gdb"
+listExtraTables = ['DataSources','DescriptionOfMapUnits']
+
+addCMULMU = True
+exportFDSCMULMU_Name = "CorrelationOfMapUnits"
+inputCMULMUPathFDS = r"Database Connections\Connection to igswzcwggsmoki.wr.usgs.gov_LOCOMAPS_RCROW.sde\locomaps.dbo.HLCorrelationOfMapUnits"
+
+addExtraFCs = True
+inputExtraFCsPathFDS = r"\\Igswzcwwgsrio\loco\Team\Felger\ActiveMaps\CastleRock24k_USGS\GIS\CR24k_PostPubsReview\CR24k_Extract_20180809\CastleRock24k_20180809_1254_06.gdb"
+listExtraFCs = ['DataSourcePolys','GenericSamples','GenericSamplesAnno','MiscAnno']
 
 #######################################################################################################################
 #Input files
@@ -341,6 +353,18 @@ if dropFields:
                                                "DISABLE_LAST_EDITOR", "DISABLE_LAST_EDIT_DATE")
         print("  Removing fields from: " + fcToDrop )
         arcpy.DeleteField_management(fcFullPath, listFiledToDrop[x])
+
+if addExtraTable:
+    for extraTable in listExtraTables:
+        arcpy.Copy_management(inputExtraTablePathGDB + "\\" + extraTable, exportGDBFullPath + "\\" + extraTable)
+        print ("Copying " + extraTable)
+
+if addCMULMU:
+    arcpy.Copy_management(inputCMULMUPathFDS, exportGDBFullPath + "\\" + exportFDSCMULMU_Name)
+
+if addExtraFCs:
+    for extraFC in listExtraFCs:
+        arcpy.Copy_management(inputExtraFCsPathFDS + "\\" + extraFC, exportFDSFullPathNew + "\\" + extraFC)
 
 arcpy.env.overwriteOutput = False
 
