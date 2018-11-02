@@ -54,33 +54,52 @@ def clipBySelectLocation(fc):
                                            invert_spatial_relationship='INVERT')
     arcpy.DeleteFeatures_management(tempLayer)  # Delete everything outside the quad
 
-def copyOnlyNeeded(inputFDSFullPath,exportFDSFullPath,exportFDSFullPathNew,inputPrefixLength,listCoreFCs):
-    arcpy.env.workspace = inputFDSFullPath
+def copyOnlyNeeded(inputfdsfullpath,exportfdsfullpath,exportfdsfullpathnew,inputprefixlength,listcorefcs):
+    arcpy.env.workspace = inputfdsfullpath
     print("Workspace is: " + arcpy.env.workspace)
-    listFCsInInput = arcpy.ListFeatureClasses("*")
-    arcpy.env.workspace = exportFDSFullPath
+    listfcsInInput = arcpy.ListFeatureClasses("*")
+    arcpy.env.workspace = exportfdsfullpath
     print("Workspace is: " + arcpy.env.workspace)
-    listToRename = []
-    for fcInInput in listFCsInInput:
-        genericFileName = NCGMPname(fcInInput.split(".")[-1],inputPrefixLength)[0]
+    for fcInInput in listfcsInInput:
+        genericFileName = NCGMPname(fcInInput.split(".")[-1],inputprefixlength)[0]
         print(" ####################")
         print("     Part: "+genericFileName)
         print("     fcInInput: " + fcInInput)
-        if genericFileName in listCoreFCs:
-            importPath = inputFDSFullPath+ "\\"+ fcInInput
-            exportDestination = exportFDSFullPath + "\\" + fcInInput.split(".")[-1] #Export has initials
-            print("     Import Path: " + importPath)
-            print("     Check if exists: "+str(arcpy.Exists(importPath)))
-            print("     Export Destintion: "+exportDestination)
+        if genericFileName in listcorefcs:
+            importpath = inputfdsfullpath+ "\\"+ fcInInput
+            exportdestination = exportfdsfullpath + "\\" + fcInInput.split(".")[-1] #Export has initials
+            print("     Import Path: " + importpath)
+            print("     Check if exists: "+str(arcpy.Exists(importpath)))
+            print("     Export Destintion: "+exportdestination)
             print("  Copying: " + fcInInput)
-            arcpy.Copy_management(inputFDSFullPath+ "\\"+ fcInInput, exportDestination)
+            arcpy.Copy_management(inputfdsfullpath+ "\\"+ fcInInput, exportdestination)
         else:
             print("  Skipping: " + fcInInput)
-    arcpy.Rename_management(in_data=exportFDSFullPath,
-                            out_data=exportFDSFullPathNew)
-    print("Renaming FDS to: " + exportFDSFullPathNew)
+    arcpy.Rename_management(in_data=exportfdsfullpath,
+                            out_data=exportfdsfullpathnew)
+    print("Renaming FDS to: " + exportfdsfullpathnew)
 
 arcpy.env.overwriteOutput = True
+
+#######################################################################################################################
+#Input lists
+#These feature classes with be "clipped" to the quad boundary with clip
+listFCsToClip = ['CartographicLines','ContactsAndFaults','MapUnitLines']
+#These feature classes with be "clipped" to the quad boundary using a select by location
+listFCsToSelectByLocation = ['MapUnitPoints','OrientationPoints']
+#Annos
+listAnnos = ['MapUnitPointsAnno24k','OrientationPointsAnno24k']
+
+#These are the feature classes that will NOT be ignored
+listCoreFCs = listFCsToClip + listFCsToSelectByLocation
+listFCsToRename = listFCsToSelectByLocation + listAnnos #These are not renamed during the select by location process
+
+#######################################################################################################################
+#Export destinations
+exportFolder = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\SpiritMtnSE24k\Extracted_GIS_db"
+exportGDBPrefix = "SMSE_"
+exportFDSPrefix = "SMSE_"
+
 #######################################################################################################################
 #Options
 buildPolygons = True
@@ -93,31 +112,43 @@ mainLineFileName = "ContactsAndFaults"
 
 makeTables = True
 #Input FC list and field list of lists must be in the same order
-listFCsForTables = ["CartographicLines","ContactsAndFaults","GeomorphLines","MapUnitPoints","MapUnitPolys","OrientationPoints","MapUnitLines"]
-listFieldsForTables = [['type'],['type'],['type'],['mapunit'],['mapunit'],['type','stationid','azimuth','inclination','locationsourceid','datasourceid'],['mapunit']]
+listFCsForTables = ["CartographicLines",
+                    "ContactsAndFaults",
+                    "MapUnitPoints",
+                    "MapUnitPolys",
+                    "OrientationPoints",
+                    "MapUnitLines"]
+listFieldsForTables = [['type'],
+                       ['type'],
+                       ['mapunit'],
+                       ['mapunit'],
+                       ['type','stationid','azimuth','inclination','locationsourceid','datasourceid'],
+                       ['type','mapunit']]
 print("Length of FieldsForTables : " +str(len(listFieldsForTables)))
 
 dropFields = True
-listFCsToDropFldsFrom = ['CartographicLines',
-                         'ContactsAndFaults',
-                         'GeomorphLines',
-                         'MapUnitPoints',
-                         'MapUnitPolys',
-                         'OrientationPoints']
+listFCsToDropFldsFrom = ['CartographicLines',#1
+                         'ContactsAndFaults',#2
+                         'MapUnitPoints',#3
+                         'MapUnitPolys',#4
+                         'OrientationPoints',#5
+                         'MapUnitLines']#6
+
 #This list of lists needs to be in the same order and the above list of FCs!
 listFiledToDrop = [['symbol','label','datasourceid','notes','creator','createdate','editor','editdate','datasourcenotes'],#1
                    ['isconcealed','existenceconfidence','identityconfidence','locationconfidencemeters','symbol',
                          'label','datasourceid','notes','creator','createdate','editor','editdate','datasourcenotes',
-                         'checkby','checknotes','validsmall','FID_selectedQuad','FID_TempQuad','Name','Active','Build'],#2
-                   ['isconcealed','existenceconfidence','identityconfidence','locationconfidencemeters','symbol',
-                        'label','datasourceid','notes','creator','createdate','editor','editdate','datasourcenotes'],#3
+                         'checkby','checknotes','validsmall','FID_selectedQuad','FID_TempQuad','Name','Active','Build','ORIG_FID'],#2
                    ['identityconfidence','label','symbol','notes','datasourceid','mapunit2','origunit','creator',
-                       'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],#4
+                         'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],#3
                    ['identityconfidence','label','symbol','notes','datasourceid','mapunit2','origunit','creator',
-                         'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],#5
+                         'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],#4
                    ['mapunit','symbol','label','plotatscale','locationconfidencemeters','identityconfidence',
-                      'orientationconfidencedegrees','notes','creator','createdate','editor','editdate','datasourcenotes',#6
-                      'mapunit2','origunit','facies']]
+                      'orientationconfidencedegrees','notes','creator','createdate','editor','editdate','datasourcenotes',
+                      'mapunit2','origunit','facies','locationsourceid'],#5
+                   ['isconcealed','existenceconfidence','identityconfidence','locationconfidencemeters','symbol',
+                         'label','datasourceid','mapunit2','origunit','creator','createdate','editor','editdate','datasourcenotes']#6
+                   ]
 
 addExtraTable = True
 inputExtraTablePathGDB = r"\\Igswzcwwgsrio\loco\Team\Felger\ActiveMaps\CastleRock24k_USGS\GIS\CR24k_PostPubsReview\CR24k_Extract_20180809\CastleRock24k_20180809_1254_06.gdb"
@@ -125,39 +156,41 @@ listExtraTables = ['DataSources','DescriptionOfMapUnits']
 
 addCMULMU = True
 exportFDSCMULMU_Name = "CorrelationOfMapUnits"
-inputCMULMUPathFDS = r"Database Connections\Connection to igswzcwggsmoki.wr.usgs.gov_LOCOMAPS_RCROW.sde\locomaps.dbo.HLCorrelationOfMapUnits"
+inputCMULMUPathFDS = r"Database Connections\Connection to igswzcwggsmoki.wr.usgs.gov_LOCOMAPS_RCROW.sde\locomaps.dbo.SMSECorrelationOfMapUnits"
 
-addExtraFCs = True
+addXSEC1 = True
+exportFDSXSEC1_Name = "XSection_1"
+inputXSEC1PathFDS = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\SpiritMtnSE24k\SMSE_Xsec.gdb\XSectionA"
+
+addXSEC2 = True
+exportFDSXSEC2_Name = "XSection_2"
+inputXSEC2PathFDS = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\SpiritMtnSE24k\SMSE_Xsec.gdb\XSectionB"
+
+addXSEC3 = False
+exportFDSXSEC3_Name = "XSection_3"
+inputXSEC3PathFDS = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\SpiritMtnSE24k\SMSE_Xsec.gdb\XSectionC"
+
+addExtraFCs = False
 inputExtraFCsPathFDS = r"\\Igswzcwwgsrio\loco\Team\Felger\ActiveMaps\CastleRock24k_USGS\GIS\CR24k_PostPubsReview\CR24k_Extract_20180809\CastleRock24k_20180809_1254_06.gdb"
 listExtraFCs = ['DataSourcePolys','GenericSamples','GenericSamplesAnno','MiscAnno']
 
+addDRG = True
+inputDRGRasterMosaic = r"\\igswzcwwgsrio\DataLibrary\GMEG_DataLibraryLinks\TOPOMAPS_DRG24K_AZ.lyr"
+
+simplifyGeomorphLines = False
+simpSQLGeomorphLines = " NOT type = '04.01.01' " #Selection will be deleted
+
+simplifyOrientationPoints = True
+simpSQLOrientationPoints = " NOT plotatscale = 24000 " #Selection will be deleted
+
 #######################################################################################################################
 #Input files
-inputSDE = r"Database Connections\Connection to igswzcwggsmoki.wr.usgs.gov_LOCOGEO_RCROW.sde"
-inputFDSName="locogeo.sde.PKHGeologicMap"
+inputDBPath = r"Database Connections\Connection to igswzdwgdbkiva.wr.usgs.gov_RSCGEO_RCROW.sde"
+inputFDSName="rscgeo.dbo.RSCGeologicMap"
 inputPrefixLength = 3 #All FCs and FDS in the import should have the same prefix (or atleast the same prefix length)
-inputFDSFullPath = inputSDE + "\\" + inputFDSName
+inputFDSFullPath = inputDBPath + "\\" + inputFDSName
 print("FDS to be copied: "+inputFDSFullPath)
-inquad = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\LOCOBigBrother\LOCOBigBrother.gdb\Focus_PKH" #Will look for polygons with 'yes' in the 'Build' attribute
-
-#######################################################################################################################
-#Input lists
-#These feature classes with be "clipped" to the quad boundary with clip
-listFCsToClip = ['CartographicLines','ContactsAndFaults','GeomorphLines','MapUnitLines']
-#These feature classes with be "clipped" to the quad boundary using a select by location
-listFCsToSelectionByLocation = ['MapUnitPoints','OrientationPoints']
-#Annos
-listAnnos = ['MapUnitPointsAnno24k','OrientationPointsAnno24k']
-
-#These are the feature classes that will NOT be ignored
-listCoreFCs = listFCsToClip + listFCsToSelectionByLocation
-listFCsToRename = listFCsToSelectionByLocation + listAnnos #These are not renamed during the select by location process
-
-#######################################################################################################################
-#Export destinations
-exportFolder = r"\\igswzcwwgsrio\loco\Team\Crow\_TestingSandbox\MapExtractor"
-exportGDBPrefix = "OptTest_"
-exportFDSPrefix = "Test_"
+inquad = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\LOCOBigBrother\LOCOBigBrother.gdb\Focus_RSC" #Will look for polygons with 'yes' in the 'Build' attribute
 
 #######################################################################################################################
 #Some Naming stuff
@@ -173,7 +206,7 @@ print("Current Run: " + timeDateString)
 
 #Export names and proj
 exportGDBName = exportGDBPrefix + timeDateString
-spatialref = arcpy.Describe(inputFDSFullPath).spatialReference
+spatialRef = arcpy.Describe(inputFDSFullPath).spatialReference
 
 exportGDBFullPath = exportFolder + "\\" + exportGDBName + ".gdb"
 print("Creating a new GDB at: "+exportGDBFullPath)
@@ -183,13 +216,14 @@ arcpy.CreateFileGDB_management(out_folder_path=exportFolder,
 #Create a FDS
 arcpy.CreateFeatureDataset_management(out_dataset_path=exportGDBFullPath,
                                       out_name=inputCoreFDSName,
-                                      spatial_reference=spatialref)
+                                      spatial_reference=spatialRef)
 
 exportFDSFullPath = exportGDBFullPath + "\\" + inputCoreFDSName
 print("Created a new FDS at: "+exportFDSFullPath)
 
 exportFDSFullPathNew = exportGDBFullPath + "\\" + exportFDSPrefix + inputFDSNameWOInitials
 
+print("Starting to copy everything over...")
 copyOnlyNeeded(inputFDSFullPath,
                exportFDSFullPath,
                exportFDSFullPathNew,
@@ -271,7 +305,7 @@ for fcInExportDB in listFCsInExportDB:
             checkAndDelete(exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2")
             checkAndDelete(fcExportPath)  # Bcz temp name
         checkAndDelete(fcPath)
-    elif fcName in listFCsToSelectionByLocation:
+    elif fcName in listFCsToSelectByLocation:
         print("    Doing a select by location")
         clipBySelectLocation(exportFDSFullPathNew + "\\" + prefixInitials + fcName)
     else:
@@ -286,6 +320,7 @@ for fcToRename in listFCsToRename:
                               out_data=exportFDSFullPathNew + "\\" + fcToRename)
 
 #######################################################################################################################
+#OPTIONS
 if buildPolygons:
     #Build polygons lines MUST be labeled ContactsAndFault and points MapUnitPoints
     arcpy.FeatureToPolygon_management(in_features=exportFDSFullPathNew+"\\"+'ContactsAndFaults',
@@ -293,22 +328,19 @@ if buildPolygons:
                                           cluster_tolerance="#",
                                           attributes="ATTRIBUTES",
                                           label_features=exportFDSFullPathNew+"\\"+'MapUnitPoints')
-########################################################################################################################
-#delete all lines except lineaments from GeomorphLines
-fcName="GeomorphLines"
 
-tempLayer = arcpy.MakeFeatureLayer_management(exportFDSFullPathNew + "\\" + fcName,"GMorph_lyr")
+if simplifyGeomorphLines:
+    #delete all lines except lineaments from GeomorphLines
+    fcName="GeomorphLines"
+    tempLayer = arcpy.MakeFeatureLayer_management(exportFDSFullPathNew + "\\" + fcName,"GMorph_lyr")
+    arcpy.SelectLayerByAttribute_management(tempLayer,"NEW_SELECTION",simpSQLGeomorphLines)
+    arcpy.DeleteFeatures_management(tempLayer)
 
-arcpy.SelectLayerByAttribute_management(tempLayer,"NEW_SELECTION"," NOT type = '04.01.01' ")  #Lineaments?
-
-arcpy.DeleteFeatures_management(tempLayer)
-
-#######################################################################################################################
-if removeQuad:
-    arcpy.env.workspace = exportFDSFullPathNew
-    checkAndDelete(quadLine)
-    checkAndDelete(quad)
-    checkAndDelete(exportFDSFullPathNew+"\\"+"QuadBoundary")
+if simplifyOrientationPoints:
+    fcName = "OrientationPoints"
+    tempLayer = arcpy.MakeFeatureLayer_management(exportFDSFullPathNew + "\\" + fcName,"Orient_lyr")
+    arcpy.SelectLayerByAttribute_management(tempLayer,"NEW_SELECTION",simpSQLOrientationPoints)
+    arcpy.DeleteFeatures_management(tempLayer)
 
 if makeTopology:
     TopologyName = 'GeologicMap_Topology'
@@ -362,9 +394,31 @@ if addExtraTable:
 if addCMULMU:
     arcpy.Copy_management(inputCMULMUPathFDS, exportGDBFullPath + "\\" + exportFDSCMULMU_Name)
 
+if addXSEC1:
+    arcpy.Copy_management(inputXSEC1PathFDS, exportGDBFullPath + "\\" + exportFDSXSEC1_Name)
+
+if addXSEC2:
+    arcpy.Copy_management(inputXSEC2PathFDS, exportGDBFullPath + "\\" + exportFDSXSEC2_Name)
+
+if addXSEC3:
+    arcpy.Copy_management(inputXSEC3PathFDS, exportGDBFullPath + "\\" + exportFDSXSEC3_Name)
+
 if addExtraFCs:
     for extraFC in listExtraFCs:
         arcpy.Copy_management(inputExtraFCsPathFDS + "\\" + extraFC, exportFDSFullPathNew + "\\" + extraFC)
+
+if addDRG:
+    arcpy.env.workspace = exportGDBFullPath
+    arcpy.Clip_management(in_raster=inputDRGRasterMosaic,
+                          out_raster="DRG",
+                          in_template_dataset=quad, nodata_value="256",
+                          clipping_geometry="ClippingGeometry", maintain_clipping_extent="NO_MAINTAIN_EXTENT")
+
+if removeQuad:
+    arcpy.env.workspace = exportFDSFullPathNew
+    checkAndDelete(quadLine)
+    checkAndDelete(quad)
+    checkAndDelete(exportFDSFullPathNew+"\\"+"QuadBoundary")
 
 arcpy.env.overwriteOutput = False
 
