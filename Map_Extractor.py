@@ -1,6 +1,7 @@
 import arcpy
 import datetime
 import pandas
+import numpy
 
 #######################################################################################################################
 #Some functions
@@ -80,141 +81,150 @@ def copyOnlyNeeded(inputfdsfullpath,exportfdsfullpath,exportfdsfullpathnew,input
                             out_data=exportfdsfullpathnew)
     print("Renaming FDS to: " + exportfdsfullpathnew)
 
-arcpy.env.overwriteOutput = True
+def parsenestedlists(df,col):
+    templist = map(unicode.strip, df[col].values[0].split(","))
+    list = []
+    for item in templist:
+        nested = item.split("|")
+        list.append(nested)
+    print(col+ " : " + str(list))
+    return list
 
+def parseValue(df,col):
+    value = df[col].values[0]
+    if str(value) == "nan": #Is there a more graceful way to do this?
+        value = ""
+    print(col+ " = " + str(value))
+    return value
+
+def parseList(df,col):
+    list = map(unicode.strip, df[col].values[0].split(","))
+    print(col + " : " + str(list))
+    return list
+
+arcpy.env.overwriteOutput = True
+start = datetimePrint()[3]
 #######################################################################################################################
-#Input lists
+#Import Export Details From Excel Sheet
+inParameters= pandas.read_excel(r"extractorParameters.xlsx", sheetname='MainInputs')
 #These feature classes with be "clipped" to the quad boundary with clip
-listFCsToClip = ['ContactsAndFaults']
+listFCsToClip = parseList(inParameters,'listFCsToClip')
 #These feature classes with be "clipped" to the quad boundary using a select by location
-listFCsToSelectByLocation = ['MapUnitPoints']
+listFCsToSelectByLocation = parseList(inParameters,'listFCsToSelectByLocation')
 #Annos
-listAnnos = ['MapUnitPointsAnno24k']
+listAnnos = parseList(inParameters,'listAnnos')
 
 #These are the feature classes that will NOT be ignored
 listCoreFCs = listFCsToClip + listFCsToSelectByLocation
 listFCsToRename = listFCsToSelectByLocation + listAnnos #These are not renamed during the select by location process
 
-#######################################################################################################################
-#Export destinations
-exportFolder = r"\\igswzcwwgsrio\loco\Team\Crow\_TestingSandbox\MapExtractor"
-exportGDBPrefix = "Test_"
-exportFDSPrefix = "" #If this is not blank the db will not be compilant
-
-#######################################################################################################################
-#Options
-buildPolygons = True
-removeQuad = True
-removeMultiParts = True
-
-makeTables = False
-#Input FC list and field list of lists must be in the same order
-listFCsForTables = ["ContactsAndFaults",
-                    "MapUnitPoints",
-                    "MapUnitPolys"]
-listFieldsForTables = [['type'],
-                       ['mapunit'],
-                       ['mapunit']]
-#print("Length of FieldsForTables : " +str(len(listFieldsForTables)))
-
-nullFields = True
-forceNull = False #Tries to use other representations like #null, #, or -9999 if field is not nullable
-listFCsToNull = ['ContactsAndFaults',#2
-                         'MapUnitPoints',#3
-                         'MapUnitPolys']#6
-#This list of lists needs to be in the same order and the above list of FCs!
-listFieldToNull = [["symbol","label","notes"],
-                   ["symbol","label","notes"],
-                   ["symbol","label","notes"]]
-
-dropFields = True
-listFCsToDropFldsFrom = ['ContactsAndFaults',#2
-                         'MapUnitPoints',#3
-                         'MapUnitPolys']#6
-#This list of lists needs to be in the same order and the above list of FCs!
-listFieldToDrop = [['creator','createdate','editor','editdate','datasourcenotes',
-                         'checkby','checknotes','validsmall','FID_selectedQuad','FID_TempQuad','Name','Active','Build','ORIG_FID'],#2
-                   ['mapunit2','origunit','creator',
-                         'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],#3
-                   ['mapunit2','origunit','creator',
-                         'createdate','editor','editdate','datasourcenotes','facies','checkby','checknotes','validsmall'],#4
-                   ]
-
-addExtraTable = True
-inputExtraTablePathGDB = r"\\Igswzcwwgsrio\loco\Geology\SDE_Stuff\GEMSReferenceGBDs\SimpleGDB.gdb"
-listExtraTables = ['GeoMaterialDict','DescriptionOfMapUnits']
-
-addCMULMU = False
-exportFDSCMULMU_Name = "CorrelationOfMapUnits"
-inputCMULMUPathFDS = r"Database Connections\Connection to igswzcwggsmoki.wr.usgs.gov_LOCOMAPS_RCROW.sde\locomaps.dbo.SMSECorrelationOfMapUnits"
-
-addXSEC1 = False
-exportFDSXSEC1_Name = "CrossSectionA"
-inputXSECAPathFDS = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\SpiritMtnSE24k\SMSE_Xsec.gdb\XSectionA"
-
-addXSEC2 = False
-exportFDSXSEC2_Name = "CrossSectionB"
-inputXSECBPathFDS = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\SpiritMtnSE24k\SMSE_Xsec.gdb\XSectionB"
-
-addXSEC3 = False
-exportFDSXSEC3_Name = "CrossSectionC"
-inputXSECCPathFDS = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\SpiritMtnSE24k\SMSE_Xsec.gdb\XSectionC"
-
-addExtraFCs = False
-inputExtraFCsPathFDS = r"\\Igswzcwwgsrio\loco\Team\Felger\ActiveMaps\CastleRock24k_USGS\GIS\CR24k_PostPubsReview\CR24k_Extract_20180809\CastleRock24k_20180809_1254_06.gdb"
-listExtraFCs = ['DataSourcePolys','GenericSamples','GenericSamplesAnno','MiscAnno']
-
-addDRG = False
-inputDRGRasterMosaic = r"\\igswzcwwgsrio\DataLibrary\GMEG_DataLibraryLinks\TOPOMAPS_DRG24K_AZ.lyr"
-
-simplifyGeomorphLines = False
-simpSQLGeomorphLines = " NOT type = '04.01.01' " #Selection will be deleted
-
-simplifyOrientationPoints = False
-simpSQLOrientationPoints = " NOT plotatscale = 24000 " #Selection will be deleted
-
-renameAllFields = True
-fieldsToRenameTable = r"\\igswzcwwgsrio\loco\Team\Crow\_TestingSandbox\MrMerger\fieldsCapTable.xlsx"
-
-crossWalkFields = True
-txtFile = r"\\Igswzcwwgsrio\loco\Team\Crow\_TestingSandbox\MapExtractor\ContactsAndFaults_Crosswalk.txt"
-listFCsSwitchTypeAndSymbol = ["ContactsAndFaults"]
-
-crossWalkPolyAndPoints = True
-
-buildGlossary = True
-glossaryTable = r"\\igswzcwwgsrio\loco\Geology\SDE_Stuff\GEMSConversionFiles\TypeAndDefsForConversion.xls"
-exampleBlankGlossaryTable = r"\\Igswzcwwgsrio\loco\Geology\SDE_Stuff\GEMSReferenceGBDs\SimpleGDB.gdb\Glossary"
-
-buildDataSources = True #This will overwrite any existing DataSources table
-getDataSourceFromFCs=True #Secondary option in buildDataSources
-miscMaps = r"\\IGSWZCWWGSRIO\DataLibrary\GeologyData\GeologicMaps\ReferenceData\GeologicMaps.gdb\GeologicMapBoundaries\MiscellaneousMaps"
-quadMaps = r"\\IGSWZCWWGSRIO\DataLibrary\GeologyData\GeologicMaps\ReferenceData\GeologicMaps.gdb\GeologicMapBoundaries\QuadMaps"
-stateMaps = r"\\IGSWZCWWGSRIO\DataLibrary\GeologyData\GeologicMaps\ReferenceData\GeologicMaps.gdb\GeologicMapBoundaries\StateMaps"
-thesisMaps = r"\\IGSWZCWWGSRIO\DataLibrary\GeologyData\GeologicMaps\ReferenceData\GeologicMaps.gdb\GeologicMapBoundaries\ThesisMaps"
-getDataSourceFromExcel=True #Secondary option in buildDataSources
-extraDataSources = r"\\igswzcwwgsrio\loco\Team\Felger\TEMP\4DataLibrary\MapFootprints_Table_Temp.xls"
-#The code assumes the following is in GEMS format (build using GEMS toolbox - Create New Database)
-exampleBlankDataSourceTable = r"\\Igswzcwwgsrio\loco\Geology\SDE_Stuff\GEMSReferenceGBDs\SimpleGDB.gdb\DataSources"
-dataSourceFieldNames = ["DataSourceID","LocationSourceID","AnalysisSourceID","OrientationSourceID","DefinitionSourceID"]
-listFCsToIgnore = ["AllPolys_Merge20180924","BouseheadPts","BousePts","BullheadPts","ChemehueviPts","PaloVerdePts"]
-mergedTable = r"\\igswzcwwgsrio\loco\Geology\SDE_Stuff\DataSourceTables\MergedMapFootprints_Table.xls"
-
-makeTopology = True
-mainLineFileName = "ContactsAndFaults" #input for makeTopology - this the final name after any renaming
-
-calcIDNumbers = True
-
-validateDataBase = True
-
-#######################################################################################################################
-#Input files
-inputDBPath = r"\\Igswzcwwgsrio\loco\Team\Crow\_TestingSandbox\MapExtractor\RSCgeoKiva_20181104_0813_29_RSC_copy.gdb"
-inputFDSName="RSCGeologicMap"
+inputDBPath = parseValue(inParameters,'inputDBPath')
+inputFDSName= parseValue(inParameters,'inputFDSName')
 inputPrefixLength = 3 #All FCs and FDS in the import should have the same prefix (or atleast the same prefix length)
 inputFDSFullPath = inputDBPath + "\\" + inputFDSName
 print("FDS to be copied: "+inputFDSFullPath)
-inquad = r"\\Igswzcwwgsrio\loco\GeologicMaps_InProgress\LOCOBigBrother\LOCOBigBrother.gdb\Focus_RSC" #Will look for polygons with 'yes' in the 'Build' attribute
+inquad = parseValue(inParameters,'inquad') #Will look for polygons with 'yes' in the 'Build' attribute
+
+
+#######################################################################################################################
+#Import Export Details From Excel Sheet
+exParameters= pandas.read_excel(r"extractorParameters.xlsx", sheetname='ExportDestinations')
+
+exportFolder = parseValue(exParameters,'exportFolder')
+exportGDBPrefix = parseValue(exParameters,'exportGDBPrefix')
+exportFDSPrefix = parseValue(exParameters,'exportFDSPrefix') #If this is not blank the db will not be compilant
+
+#######################################################################################################################
+#Import Options From Excel Sheet
+opParameters= pandas.read_excel(r"extractorParameters.xlsx", sheetname='InputsOptional')
+
+buildPolygons = parseValue(opParameters,'buildPolygons')
+removeQuad = parseValue(opParameters,'removeQuad')
+removeMultiParts = parseValue(opParameters,'removeMultiParts')
+print("\n")
+makeTables = parseValue(opParameters,'makeTables')
+#Input FC list and field list of lists must be in the same order
+listFCsForTables = parseList(opParameters,"listFCsForTables")
+listFieldsForTables = parsenestedlists(opParameters,"listFieldsForTables")
+print("\n")
+nullFields = parseValue(opParameters,'nullFields')
+forceNull = parseValue(opParameters,'forceNull')
+listFCsToNull = parseList(opParameters,'listFCsToNull')
+#This list of lists needs to be in the same order and the above list of FCs!
+listFieldToNull = parsenestedlists(opParameters,'listFieldToNull')
+print("\n")
+dropFields = parseValue(opParameters,'dropFields')
+listFCsToDropFldsFrom = parseList(opParameters,'listFCsToDropFldsFrom')
+#This list of lists needs to be in the same order and the above list of FCs!
+listFieldToDrop = parsenestedlists(opParameters,'listFieldToDrop')
+print("\n")
+addExtraTable = parseValue(opParameters,'addExtraTable')
+inputExtraTablePathGDB = parseValue(opParameters,'inputExtraTablePathGDB')
+listExtraTables = parseList(opParameters,'listExtraTables')
+print("\n")
+addCMULMU = parseValue(opParameters,'addCMULMU')
+exportFDSCMULMU_Name = parseValue(opParameters,'exportFDSCMULMU_Name')
+inputCMULMUPathFDS = parseValue(opParameters,'inputCMULMUPathFDS')
+print("\n")
+addXSEC1 = parseValue(opParameters,'addXSEC1')
+exportFDSXSEC1_Name = parseValue(opParameters,"exportFDSXSEC1_Name")
+inputXSECAPathFDS = parseValue(opParameters,"inputXSECAPathFDS")
+print("\n")
+addXSEC2 = parseValue(opParameters,'addXSEC2')
+exportFDSXSEC2_Name = parseValue(opParameters,"exportFDSXSEC2_Name")
+inputXSECBPathFDS = parseValue(opParameters,"inputXSECBPathFDS")
+print("\n")
+addXSEC3 = parseValue(opParameters,'addXSEC3')
+exportFDSXSEC3_Name = parseValue(opParameters,"exportFDSXSEC3_Name")
+inputXSECCPathFDS = parseValue(opParameters,"inputXSECCPathFDS")
+print("\n")
+addExtraFCs = parseValue(opParameters,'addExtraFCs')
+inputExtraFCsPathFDS = parseValue(opParameters,'inputExtraFCsPathFDS')
+listExtraFCs = parseList(opParameters,'listExtraFCs')
+print("\n")
+addDRG = parseValue(opParameters,'addDRG')
+inputDRGRasterMosaic = parseValue(opParameters,'inputDRGRasterMosaic')
+print("\n")
+simplifyGeomorphLines = parseValue(opParameters,'simplifyGeomorphLines')
+simpSQLGeomorphLines = parseValue(opParameters,"simpSQLGeomorphLines") #Selection will be deleted
+print("\n")
+simplifyOrientationPoints = parseValue(opParameters,'simplifyOrientationPoints')
+simpSQLOrientationPoints = parseValue(opParameters,'simpSQLOrientationPoints') #Selection will be deleted
+print("\n")
+renameAllFields = parseValue(opParameters,'renameAllFields')
+fieldsToRenameTable = parseValue(opParameters, 'fieldsToRenameTable')
+print("\n")
+crossWalkFields = parseValue(opParameters,'crossWalkFields')
+txtFile = r"\\Igswzcwwgsrio\loco\Team\Crow\_TestingSandbox\MapExtractor\ContactsAndFaults_Crosswalk.txt"
+listFCsSwitchTypeAndSymbol = ["ContactsAndFaults"]
+print("\n")
+crossWalkPolyAndPoints = parseValue(opParameters,'crossWalkPolyAndPoints')
+print("\n")
+changeFieldType = parseValue(opParameters,'changeFieldType')
+listFieldsToChange = parseList(opParameters,'listFieldsToChange')
+newType = parseValue(opParameters,'newType') #All fields in listFieldToChange will be changed to this type
+print("\n")
+buildGlossary = parseValue(opParameters,'buildGlossary')
+glossaryTable = parseValue(opParameters,'glossaryTable')
+exampleBlankGlossaryTable = parseValue(opParameters,"exampleBlankGlossaryTable")
+print("\n")
+buildDataSources = parseValue(opParameters,'buildDataSources')#This will overwrite any existing DataSources table
+getDataSourceFromFCs = parseValue(opParameters,'getDataSourceFromFCs') #Secondary option in buildDataSources
+listFCsWithDataSourceInformation = parseList(opParameters,'listFCsWithDataSourceInformation')
+getDataSourceFromExcel= parseValue(opParameters,'getDataSourceFromExcel') #Secondary option in buildDataSources
+extraDataSources = parseValue(opParameters,'extraDataSources')
+#The code assumes the following is in GEMS format (build using GEMS toolbox - Create New Database)
+exampleBlankDataSourceTable = parseValue(opParameters,'exampleBlankDataSourceTable')
+dataSourceFieldNames = parseList(opParameters,'dataSourceFieldNames')
+listFCsToIgnore = parseList(opParameters,'listFCsToIgnore')
+mergedTable = parseValue(opParameters,'mergedTable')
+print("\n")
+makeTopology = parseValue(opParameters,'makeTopology')
+mainLineFileName = parseValue(opParameters,'mainLineFileName') #input for makeTopology - this the final name after any renaming
+print("\n")
+calcIDNumbers = parseValue(opParameters,'calcIDNumbers')
+print("\n")
+validateDataBase = parseValue(opParameters,'validateDataBase')
 
 #######################################################################################################################
 #Some Naming stuff
@@ -337,7 +347,7 @@ for fcInExportDB in listFCsInExportDB:
 
 #######################################################################################################################
 #rename the feature classes with feature linked anno
-#print(listFCsToRename)
+print(listFCsToRename)
 for fcToRename in listFCsToRename:
     print ("Renaming: " + fcToRename)
     arcpy.Rename_management(in_data=exportFDSFullPathNew + "\\" + prefixInitials + fcToRename,
@@ -512,18 +522,8 @@ if renameAllFields:
                     arcpy.AlterField_management(fcpath, field.name,"zzzz")  # Without this simple case changes are not always recognized
                     arcpy.AlterField_management(fcpath, "zzzz", newfieldname)
                     print("     >" + field.name + " renamed to: " + newfieldname)
-                #This did not work can't add a second OBJECTID field regardless of case
-                # elif field.name == "objectid":
-                #     print("     >Copying objectid to OBJECTID")
-                #     arcpy.AddField_management(fcpath,"OBJECTID","SHORT")
-                #     arcpy.CalculateField_management(fcpath, "OBJECTID","[objectid]")
                 else:
                     print("      Did not need to rename: " + field.name)
-            fieldsforLocConf = arcpy.ListFields(fcpath)
-            #TODO change the type of LocantionConfidenceMeters in the db
-            # for field in fieldsforLocConf:
-            #     if field.name == "LocationConfidenceMeters":
-            #         arcpy.AlterField_management(in_table=fcpath, field=field.name, field_type='FLOAT')
 
 if crossWalkFields:
     print("Crosswalking fields...")
@@ -538,6 +538,30 @@ if crossWalkFields:
                 arcpy.CalculateField_management(fcpath2, "Symbol", "[Type]")
 
     arcpy.AttributeByKeyValues_GEMS(exportGDBFullPath, txtFile, True)
+
+if changeFieldType:
+    print("Changing field types...")
+    arcpy.env.workspace = exportGDBFullPath
+    listFDSInGDB = arcpy.ListDatasets()
+    for finalfds in listFDSInGDB:  # this goes through all the FDS is that needed?
+        listFCsinFinalFDS = arcpy.ListFeatureClasses(feature_dataset=finalfds)
+        for finalfc in listFCsinFinalFDS:
+            fcpath = exportFDSFullPathNew + "\\" + finalfc
+            listfieldsfortypechange = arcpy.ListFields(fcpath)
+            for fieldtype in listfieldsfortypechange:
+                if fieldtype.name in listFieldsToChange:
+                    print("     >" + fieldtype.name + " type changing to: " + newType)
+                    arcpy.AddField_management(fcpath, "temp", newType)
+                    print(fieldtype.name)
+                    arcpy.env.workspace = exportGDBFullPath
+                    edit = arcpy.da.Editor(arcpy.env.workspace)
+                    edit.startEditing(False, True)
+                    edit.startOperation()
+                    arcpy.CalculateField_management(fcpath, "temp", "!"+fieldtype.name+"!","PYTHON")
+                    edit.stopOperation()
+                    edit.stopEditing(True)
+                    arcpy.DeleteField_management(fcpath, fieldtype.name)
+                    arcpy.AlterField_management(fcpath, "temp", fieldtype.name)
 
 if crossWalkPolyAndPoints:
     print("Crosswalking polys and points...")
@@ -620,7 +644,7 @@ if buildDataSources:
     print("Building DataSources table...")
     # Merge all the footprints to get a master list of datasources
     mergedFCs = r"in_memory\mergedFCs"
-    arcpy.Merge_management([miscMaps, quadMaps, stateMaps, thesisMaps], mergedFCs)
+    arcpy.Merge_management(listFCsWithDataSourceInformation, mergedFCs)
     arcpy.TableToExcel_conversion(Input_Table=mergedFCs,
                                   Output_Excel_File=mergedTable)
     arcpy.Delete_management(mergedFCs)
@@ -766,6 +790,10 @@ if validateDataBase:
     arcpy.ValidateDatabase_GEMS(
         Input_geodatabase=exportGDBFullPath,
         Output_workspace="")
+
+end = datetimePrint()[3]
+elapsed = end-start
+print("Elapsed time: "+str(elapsed))
 
 arcpy.env.overwriteOutput = False
 
