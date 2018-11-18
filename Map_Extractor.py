@@ -1,7 +1,6 @@
 import arcpy
 import datetime
 import pandas
-import numpy
 
 #######################################################################################################################
 #Some functions
@@ -87,26 +86,36 @@ def parsenestedlists(df,col):
     for item in templist:
         nested = item.split("|")
         list.append(nested)
-    print(col+ " : " + str(list))
+    print(" "+col+ " : " + str(list))
     return list
 
 def parseValue(df,col):
     value = df[col].values[0]
-    if str(value) == "nan": #Is there a more graceful way to do this?
+    if str(value) == "nan" or str(value) == "NaN": #Is there a more graceful way to do this?
         value = ""
-    print(col+ " = " + str(value))
+    print(" "+col+ " = " + str(value))
     return value
 
 def parseList(df,col):
-    list = map(unicode.strip, df[col].values[0].split(","))
-    print(col + " : " + str(list))
+    value = df[col].values[0]
+    if str(value) == "nan" or str(value) == "NaN":
+        list = []
+    else:
+        list = map(unicode.strip, df[col].values[0].split(","))
+    print(" "+col + " : " + str(list))
     return list
 
 arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
+
+parametersExcelFilePath = r"extractorParametersCARR.xlsx"
 #######################################################################################################################
 #Import Export Details From Excel Sheet
-inParameters= pandas.read_excel(r"extractorParameters.xlsx", sheetname='MainInputs')
+
+inParameters= pandas.read_excel(parametersExcelFilePath, sheetname='MainInputs',skiprows=1)
+# print(inParameters)
+print("--------------------------------------------")
+print("Input parameters being used: ")
 #These feature classes with be "clipped" to the quad boundary with clip
 listFCsToClip = parseList(inParameters,'listFCsToClip')
 #These feature classes with be "clipped" to the quad boundary using a select by location
@@ -120,7 +129,7 @@ listFCsToRename = listFCsToSelectByLocation + listAnnos #These are not renamed d
 
 inputDBPath = parseValue(inParameters,'inputDBPath')
 inputFDSName= parseValue(inParameters,'inputFDSName')
-inputPrefixLength = 3 #All FCs and FDS in the import should have the same prefix (or atleast the same prefix length)
+inputPrefixLength = parseValue(inParameters,'inputPrefixLength') #All FCs and FDS in the import should have the same prefix (or atleast the same prefix length)
 inputFDSFullPath = inputDBPath + "\\" + inputFDSName
 print("FDS to be copied: "+inputFDSFullPath)
 inquad = parseValue(inParameters,'inquad') #Will look for polygons with 'yes' in the 'Build' attribute
@@ -128,86 +137,88 @@ inquad = parseValue(inParameters,'inquad') #Will look for polygons with 'yes' in
 
 #######################################################################################################################
 #Import Export Details From Excel Sheet
-exParameters= pandas.read_excel(r"extractorParameters.xlsx", sheetname='ExportDestinations')
-
+exParameters= pandas.read_excel(parametersExcelFilePath, sheetname='ExportDestinations',skiprows=1)
+print("--------------------------------------------")
+print("Export parameters being used: ")
 exportFolder = parseValue(exParameters,'exportFolder')
 exportGDBPrefix = parseValue(exParameters,'exportGDBPrefix')
 exportFDSPrefix = parseValue(exParameters,'exportFDSPrefix') #If this is not blank the db will not be compilant
 
 #######################################################################################################################
 #Import Options From Excel Sheet
-opParameters= pandas.read_excel(r"extractorParameters.xlsx", sheetname='InputsOptional')
-
+opParameters= pandas.read_excel(parametersExcelFilePath , sheetname='InputsOptional',skiprows=1)
+print("--------------------------------------------")
+print("Optional parameters being used: ")
 buildPolygons = parseValue(opParameters,'buildPolygons')
 removeQuad = parseValue(opParameters,'removeQuad')
 removeMultiParts = parseValue(opParameters,'removeMultiParts')
-print("\n")
+
 makeTables = parseValue(opParameters,'makeTables')
 #Input FC list and field list of lists must be in the same order
 listFCsForTables = parseList(opParameters,"listFCsForTables")
 listFieldsForTables = parsenestedlists(opParameters,"listFieldsForTables")
-print("\n")
+
 nullFields = parseValue(opParameters,'nullFields')
 forceNull = parseValue(opParameters,'forceNull')
 listFCsToNull = parseList(opParameters,'listFCsToNull')
 #This list of lists needs to be in the same order and the above list of FCs!
 listFieldToNull = parsenestedlists(opParameters,'listFieldToNull')
-print("\n")
+
 dropFields = parseValue(opParameters,'dropFields')
 listFCsToDropFldsFrom = parseList(opParameters,'listFCsToDropFldsFrom')
 #This list of lists needs to be in the same order and the above list of FCs!
 listFieldToDrop = parsenestedlists(opParameters,'listFieldToDrop')
-print("\n")
+
 addExtraTable = parseValue(opParameters,'addExtraTable')
 inputExtraTablePathGDB = parseValue(opParameters,'inputExtraTablePathGDB')
 listExtraTables = parseList(opParameters,'listExtraTables')
-print("\n")
+
 addCMULMU = parseValue(opParameters,'addCMULMU')
 exportFDSCMULMU_Name = parseValue(opParameters,'exportFDSCMULMU_Name')
 inputCMULMUPathFDS = parseValue(opParameters,'inputCMULMUPathFDS')
-print("\n")
+
 addXSEC1 = parseValue(opParameters,'addXSEC1')
 exportFDSXSEC1_Name = parseValue(opParameters,"exportFDSXSEC1_Name")
 inputXSECAPathFDS = parseValue(opParameters,"inputXSECAPathFDS")
-print("\n")
+
 addXSEC2 = parseValue(opParameters,'addXSEC2')
 exportFDSXSEC2_Name = parseValue(opParameters,"exportFDSXSEC2_Name")
 inputXSECBPathFDS = parseValue(opParameters,"inputXSECBPathFDS")
-print("\n")
+
 addXSEC3 = parseValue(opParameters,'addXSEC3')
 exportFDSXSEC3_Name = parseValue(opParameters,"exportFDSXSEC3_Name")
 inputXSECCPathFDS = parseValue(opParameters,"inputXSECCPathFDS")
-print("\n")
+
 addExtraFCs = parseValue(opParameters,'addExtraFCs')
 inputExtraFCsPathFDS = parseValue(opParameters,'inputExtraFCsPathFDS')
 listExtraFCs = parseList(opParameters,'listExtraFCs')
-print("\n")
+
 addDRG = parseValue(opParameters,'addDRG')
 inputDRGRasterMosaic = parseValue(opParameters,'inputDRGRasterMosaic')
-print("\n")
+
 simplifyGeomorphLines = parseValue(opParameters,'simplifyGeomorphLines')
 simpSQLGeomorphLines = parseValue(opParameters,"simpSQLGeomorphLines") #Selection will be deleted
-print("\n")
+
 simplifyOrientationPoints = parseValue(opParameters,'simplifyOrientationPoints')
 simpSQLOrientationPoints = parseValue(opParameters,'simpSQLOrientationPoints') #Selection will be deleted
-print("\n")
+
 renameAllFields = parseValue(opParameters,'renameAllFields')
 fieldsToRenameTable = parseValue(opParameters, 'fieldsToRenameTable')
-print("\n")
+
 crossWalkFields = parseValue(opParameters,'crossWalkFields')
-txtFile = r"\\Igswzcwwgsrio\loco\Team\Crow\_TestingSandbox\MapExtractor\ContactsAndFaults_Crosswalk.txt"
-listFCsSwitchTypeAndSymbol = ["ContactsAndFaults"]
-print("\n")
+txtFile = parseValue(opParameters,'txtFile')
+listFCsSwitchTypeAndSymbol = parseList(opParameters,'listFCsSwitchTypeAndSymbol')
+
 crossWalkPolyAndPoints = parseValue(opParameters,'crossWalkPolyAndPoints')
-print("\n")
+
 changeFieldType = parseValue(opParameters,'changeFieldType')
 listFieldsToChange = parseList(opParameters,'listFieldsToChange')
 newType = parseValue(opParameters,'newType') #All fields in listFieldToChange will be changed to this type
-print("\n")
+
 buildGlossary = parseValue(opParameters,'buildGlossary')
 glossaryTable = parseValue(opParameters,'glossaryTable')
 exampleBlankGlossaryTable = parseValue(opParameters,"exampleBlankGlossaryTable")
-print("\n")
+
 buildDataSources = parseValue(opParameters,'buildDataSources')#This will overwrite any existing DataSources table
 getDataSourceFromFCs = parseValue(opParameters,'getDataSourceFromFCs') #Secondary option in buildDataSources
 listFCsWithDataSourceInformation = parseList(opParameters,'listFCsWithDataSourceInformation')
@@ -218,32 +229,34 @@ exampleBlankDataSourceTable = parseValue(opParameters,'exampleBlankDataSourceTab
 dataSourceFieldNames = parseList(opParameters,'dataSourceFieldNames')
 listFCsToIgnore = parseList(opParameters,'listFCsToIgnore')
 mergedTable = parseValue(opParameters,'mergedTable')
-print("\n")
+
 makeTopology = parseValue(opParameters,'makeTopology')
 mainLineFileName = parseValue(opParameters,'mainLineFileName') #input for makeTopology - this the final name after any renaming
-print("\n")
+
 calcIDNumbers = parseValue(opParameters,'calcIDNumbers')
-print("\n")
+
 validateDataBase = parseValue(opParameters,'validateDataBase')
 
 #######################################################################################################################
 #Some Naming stuff
+print("--------------------------------------------")
+print("Starting the core clipping functions: ")
 inputCoreFDSName = inputFDSName.split(".")[-1]  # Cut off anything before the last period
 inputFDSNameWOInitials = NCGMPname(inputCoreFDSName,inputPrefixLength)[0]
 prefixInitials = NCGMPname(inputCoreFDSName,inputPrefixLength)[1]
-print("Prefix name: "+prefixInitials)
+print(" Prefix name: "+prefixInitials)
 
 #######################################################################################################################
 # Create a new GDB
 timeDateString = datetimePrint()[0] # Gets time and date to add to export
-print("Current Run: " + timeDateString)
+print(" Current Run: " + timeDateString)
 
 #Export names and proj
 exportGDBName = exportGDBPrefix + timeDateString
 spatialRef = arcpy.Describe(inputFDSFullPath).spatialReference
 
 exportGDBFullPath = exportFolder + "\\" + exportGDBName + ".gdb"
-print("Creating a new GDB at: "+exportGDBFullPath)
+print(" Creating a new GDB at: "+exportGDBFullPath)
 arcpy.CreateFileGDB_management(out_folder_path=exportFolder,
                                out_name=exportGDBName,
                                out_version="CURRENT")
@@ -253,11 +266,11 @@ arcpy.CreateFeatureDataset_management(out_dataset_path=exportGDBFullPath,
                                       spatial_reference=spatialRef)
 
 exportFDSFullPath = exportGDBFullPath + "\\" + inputCoreFDSName
-print("Created a new FDS at: "+exportFDSFullPath)
+print(" Created a new FDS at: "+exportFDSFullPath)
 
 exportFDSFullPathNew = exportGDBFullPath + "\\" + exportFDSPrefix + inputFDSNameWOInitials
 
-print("Starting to copy everything over...")
+print(" Starting to copy everything over...")
 copyOnlyNeeded(inputFDSFullPath,
                exportFDSFullPath,
                exportFDSFullPathNew,
@@ -269,7 +282,7 @@ copyOnlyNeeded(inputFDSFullPath,
 # Only use quads that are labeled as active
 quad = exportFDSFullPathNew + "\\" + "selectedQuad"
 quadTemp = exportFDSFullPathNew + "\\" + "TempQuad"
-print("Finding active boundaries...")
+print(" Finding active boundaries...")
 arcpy.Select_analysis(inquad,
                       quadTemp,
                       "Build = 'yes'")
@@ -280,6 +293,7 @@ arcpy.DeleteIdentical_management(in_dataset=quad,
                                  fields="Shape",
                                  xy_tolerance="",
                                  z_tolerance="0")
+#TODO do check here to make sure that a polygon ended up in quad
 checkAndDelete(quadTemp)
 
 #######################################################################################################################
@@ -552,7 +566,7 @@ if changeFieldType:
                 if fieldtype.name in listFieldsToChange:
                     print("     >" + fieldtype.name + " type changing to: " + newType)
                     arcpy.AddField_management(fcpath, "temp", newType)
-                    print(fieldtype.name)
+                    #print(fieldtype.name)
                     arcpy.env.workspace = exportGDBFullPath
                     edit = arcpy.da.Editor(arcpy.env.workspace)
                     edit.startEditing(False, True)
@@ -670,8 +684,8 @@ if buildDataSources:
         master_URL = master_URL + df2['SOURCEURL'].values.tolist()
         master_Reference = master_Reference + df2['REFERENCE'].values.tolist()
 
-    print(master_DataSourceID)
-    print(master_Reference)
+    # print(master_DataSourceID)
+    # print(master_Reference)
 
     # List all the FCs in the map or db
     arcpy.env.workspace = exportFDSFullPathNew
