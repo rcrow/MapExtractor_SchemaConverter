@@ -1,0 +1,48 @@
+
+#Input these with variable/no real thought as a proof of concept - randomly at times
+ContactsAndFaults					
+Symbol		|Type	    			|LocationConfidenceMeters	|ExistenceConfidence|IdentityConfidence	|IsConcealed
+01.01.01	|contact				|10	                        |certain	        |certain	        |N
+01.01.02	|contact   				|10                         |questionable       |questionable       |N
+01.01.03	|contact   				|50                         |certain            |certain            |N
+01.01.04	|contact   				|50							|questionable      	|questionable		|N
+01.01.05	|contact   				|100                        |questionable       |certain            |N
+01.01.06	|contact   				|100                        |questionable       |questionable       |N
+01.01.08	|contact   				|50                         |questionable       |questionable       |Y
+01.01.09	|contact, internal		|10                   		|certain          	|certain       		|N
+01.01.12	|contact, internal		|9999						|certain			|certain 			|N
+01.01.33	|contact, incised-scarp |10							|certain	        |certain	        |N
+01.01.17	|contact, gradational	|9999						|certain			|certain			|N
+01.01.19	|contact, gradational	|9999						|certain			|certain 			|N
+01.01.21	|contact, gradational	|9999						|certain			|certain 			|N
+02.01.01	|fault					|9999						|certain			|certain 			|N
+02.01.03	|fault					|9999						|certain			|certain 			|N
+02.01.07	|fault					|9999						|certain			|certain 			|N
+02.01.08	|fault					|9999						|certain			|certain 			|N
+12.01		|fluvial scarp			|9999						|certain			|certain 			|N
+12.02		|fluvial scarp			|9999						|certain			|certain 			|N
+12.03		|fluvial scarp			|9999						|certain			|certain 			|N
+01.02.01	|key bed				|10							|certain			|certain			|N
+30.02.29	|shoreline				|10							|certain			|certain			|N
+31.08		|map neatline			|0							|certain			|certain			|N
+31.31		|scratch boundary		|0							|certain			|certain			|N
+02.01.04	|fault					|100						|questionable	    |questionable       |N
+02.07.01	|fault, oblique			|9999						|certain			|certain 			|N
+02.07.07	|fault, oblique			|9999						|certain			|certain 			|N
+02.11.09	|fault, oblique			|9999						|certain			|certain 			|N
+02.02.09	|fault, normal low-angle|9999						|certain			|certain 			|N
+02.02.01	|fault, normal			|9999						|certain			|certain 			|N
+02.02.03	|fault, normal			|9999						|certain			|certain 			|N
+02.02.04	|fault, normal			|9999						|certain			|certain 			|N
+02.02.16	|fault, normal low-angle|9999						|certain			|certain 			|N
+02.02.15	|fault, normal low-angle|9999						|certain			|certain 			|N
+02.02.07	|fault, normal			|9999						|certain			|certain 			|N
+
+OrientationPoints				
+Symbol	|Type	    		|IdentityConfidence	|OrientationConfidenceDegrees	|LocationSourceID	|LocationConfidenceMeters
+02.11.09|fault, inclined 	|certain			|5								|this study			|10
+09.017	|slickenline 		|certain			|5								|this study			|10
+
+CartographicLines				
+Symbol	|Type	    	
+31.10	|cross section line 
