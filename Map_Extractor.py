@@ -86,7 +86,7 @@ def parsenestedlists(df,col):
     for item in templist:
         nested = item.split("|")
         list.append(nested)
-    print(" "+col+ " : " + str(list))
+    print(" "+col+ ": " + str(list))
     return list
 
 def parseValue(df,col):
@@ -102,7 +102,7 @@ def parseList(df,col):
         list = []
     else:
         list = map(unicode.strip, df[col].values[0].split(","))
-    print(" "+col + " : " + str(list))
+    print(" "+col + ": " + str(list))
     return list
 
 arcpy.env.overwriteOutput = True
@@ -154,84 +154,102 @@ removeQuad = parseValue(opParameters,'removeQuad')
 removeMultiParts = parseValue(opParameters,'removeMultiParts')
 
 makeTables = parseValue(opParameters,'makeTables')
-#Input FC list and field list of lists must be in the same order
-listFCsForTables = parseList(opParameters,"listFCsForTables")
-listFieldsForTables = parsenestedlists(opParameters,"listFieldsForTables")
+if makeTables:
+    #Input FC list and field list of lists must be in the same order
+    listFCsForTables = parseList(opParameters,"listFCsForTables")
+    listFieldsForTables = parsenestedlists(opParameters,"listFieldsForTables")
 
 nullFields = parseValue(opParameters,'nullFields')
-forceNull = parseValue(opParameters,'forceNull')
-listFCsToNull = parseList(opParameters,'listFCsToNull')
-#This list of lists needs to be in the same order and the above list of FCs!
-listFieldToNull = parsenestedlists(opParameters,'listFieldToNull')
+if nullFields:
+    forceNull = parseValue(opParameters,'forceNull')
+    listFCsToNull = parseList(opParameters,'listFCsToNull')
+    #This list of lists needs to be in the same order and the above list of FCs!
+    listFieldToNull = parsenestedlists(opParameters,'listFieldToNull')
 
 dropFields = parseValue(opParameters,'dropFields')
-listFCsToDropFldsFrom = parseList(opParameters,'listFCsToDropFldsFrom')
-#This list of lists needs to be in the same order and the above list of FCs!
-listFieldToDrop = parsenestedlists(opParameters,'listFieldToDrop')
+if dropFields:
+    listFCsToDropFldsFrom = parseList(opParameters,'listFCsToDropFldsFrom')
+    #This list of lists needs to be in the same order and the above list of FCs!
+    listFieldToDrop = parsenestedlists(opParameters,'listFieldToDrop')
 
 addExtraTable = parseValue(opParameters,'addExtraTable')
-inputExtraTablePathGDB = parseValue(opParameters,'inputExtraTablePathGDB')
-listExtraTables = parseList(opParameters,'listExtraTables')
+if addExtraTable:
+    inputExtraTablePathGDB = parseValue(opParameters,'inputExtraTablePathGDB')
+    listExtraTables = parseList(opParameters,'listExtraTables')
 
 addCMULMU = parseValue(opParameters,'addCMULMU')
-exportFDSCMULMU_Name = parseValue(opParameters,'exportFDSCMULMU_Name')
-inputCMULMUPathFDS = parseValue(opParameters,'inputCMULMUPathFDS')
+if addCMULMU:
+    exportFDSCMULMU_Name = parseValue(opParameters,'exportFDSCMULMU_Name')
+    inputCMULMUPathFDS = parseValue(opParameters,'inputCMULMUPathFDS')
 
 addXSEC1 = parseValue(opParameters,'addXSEC1')
-exportFDSXSEC1_Name = parseValue(opParameters,"exportFDSXSEC1_Name")
-inputXSECAPathFDS = parseValue(opParameters,"inputXSECAPathFDS")
+if addXSEC1:
+    exportFDSXSEC1_Name = parseValue(opParameters,"exportFDSXSEC1_Name")
+    inputXSECAPathFDS = parseValue(opParameters,"inputXSECAPathFDS")
 
 addXSEC2 = parseValue(opParameters,'addXSEC2')
-exportFDSXSEC2_Name = parseValue(opParameters,"exportFDSXSEC2_Name")
-inputXSECBPathFDS = parseValue(opParameters,"inputXSECBPathFDS")
+if addXSEC2:
+    exportFDSXSEC2_Name = parseValue(opParameters,"exportFDSXSEC2_Name")
+    inputXSECBPathFDS = parseValue(opParameters,"inputXSECBPathFDS")
 
 addXSEC3 = parseValue(opParameters,'addXSEC3')
-exportFDSXSEC3_Name = parseValue(opParameters,"exportFDSXSEC3_Name")
-inputXSECCPathFDS = parseValue(opParameters,"inputXSECCPathFDS")
+if addXSEC3:
+    exportFDSXSEC3_Name = parseValue(opParameters,"exportFDSXSEC3_Name")
+    inputXSECCPathFDS = parseValue(opParameters,"inputXSECCPathFDS")
 
 addExtraFCs = parseValue(opParameters,'addExtraFCs')
-inputExtraFCsPathFDS = parseValue(opParameters,'inputExtraFCsPathFDS')
-listExtraFCs = parseList(opParameters,'listExtraFCs')
+if addExtraFCs:
+    inputExtraFCsPathFDS = parseValue(opParameters,'inputExtraFCsPathFDS')
+    listExtraFCs = parseList(opParameters,'listExtraFCs')
 
 addDRG = parseValue(opParameters,'addDRG')
-inputDRGRasterMosaic = parseValue(opParameters,'inputDRGRasterMosaic')
+if addDRG: inputDRGRasterMosaic = parseValue(opParameters,'inputDRGRasterMosaic')
 
 simplifyGeomorphLines = parseValue(opParameters,'simplifyGeomorphLines')
-simpSQLGeomorphLines = parseValue(opParameters,"simpSQLGeomorphLines") #Selection will be deleted
+if simplifyGeomorphLines: simpSQLGeomorphLines = parseValue(opParameters,"simpSQLGeomorphLines") #Selection will be deleted
 
 simplifyOrientationPoints = parseValue(opParameters,'simplifyOrientationPoints')
-simpSQLOrientationPoints = parseValue(opParameters,'simpSQLOrientationPoints') #Selection will be deleted
+if simplifyOrientationPoints: simpSQLOrientationPoints = parseValue(opParameters,'simpSQLOrientationPoints') #Selection will be deleted
 
 renameAllFields = parseValue(opParameters,'renameAllFields')
-fieldsToRenameTable = parseValue(opParameters, 'fieldsToRenameTable')
+if renameAllFields: fieldsToRenameTable = parseValue(opParameters, 'fieldsToRenameTable')
+
+renameSpecific = parseValue(opParameters,'renameSpecific')
+if renameSpecific:
+    listSpecificFCsToRename = parseList(opParameters,"listSpecificFCsToRename")
+    listSpecificFieldsToRename = parsenestedlists(opParameters,"listSpecificFieldsToRename")
 
 crossWalkFields = parseValue(opParameters,'crossWalkFields')
-txtFile = parseValue(opParameters,'txtFile')
-listFCsSwitchTypeAndSymbol = parseList(opParameters,'listFCsSwitchTypeAndSymbol')
+if crossWalkFields:
+    txtFile = parseValue(opParameters,'txtFile')
+    listFCsSwitchTypeAndSymbol = parseList(opParameters,'listFCsSwitchTypeAndSymbol')
 
 crossWalkPolyAndPoints = parseValue(opParameters,'crossWalkPolyAndPoints')
 
 changeFieldType = parseValue(opParameters,'changeFieldType')
-listFieldsToChange = parseList(opParameters,'listFieldsToChange')
-newType = parseValue(opParameters,'newType') #All fields in listFieldToChange will be changed to this type
+if changeFieldType:
+    listFieldsToChange = parseList(opParameters,'listFieldsToChange')
+    newType = parseValue(opParameters,'newType') #All fields in listFieldToChange will be changed to this type
 
 buildGlossary = parseValue(opParameters,'buildGlossary')
-glossaryTable = parseValue(opParameters,'glossaryTable')
-exampleBlankGlossaryTable = parseValue(opParameters,"exampleBlankGlossaryTable")
+if buildGlossary:
+    glossaryTable = parseValue(opParameters,'glossaryTable')
+    exampleBlankGlossaryTable = parseValue(opParameters,"exampleBlankGlossaryTable")
 
 buildDataSources = parseValue(opParameters,'buildDataSources')#This will overwrite any existing DataSources table
-getDataSourceFromFCs = parseValue(opParameters,'getDataSourceFromFCs') #Secondary option in buildDataSources
-listFCsWithDataSourceInformation = parseList(opParameters,'listFCsWithDataSourceInformation')
-getDataSourceFromExcel= parseValue(opParameters,'getDataSourceFromExcel') #Secondary option in buildDataSources
-extraDataSources = parseValue(opParameters,'extraDataSources')
-#The code assumes the following is in GEMS format (build using GEMS toolbox - Create New Database)
-exampleBlankDataSourceTable = parseValue(opParameters,'exampleBlankDataSourceTable')
-dataSourceFieldNames = parseList(opParameters,'dataSourceFieldNames')
-listFCsToIgnore = parseList(opParameters,'listFCsToIgnore')
-mergedTable = parseValue(opParameters,'mergedTable')
+if buildDataSources:
+    getDataSourceFromFCs = parseValue(opParameters,'getDataSourceFromFCs') #Secondary option in buildDataSources
+    listFCsWithDataSourceInformation = parseList(opParameters,'listFCsWithDataSourceInformation')
+    getDataSourceFromExcel= parseValue(opParameters,'getDataSourceFromExcel') #Secondary option in buildDataSources
+    extraDataSources = parseValue(opParameters,'extraDataSources')
+    #The code assumes the following is in GEMS format (build using GEMS toolbox - Create New Database)
+    exampleBlankDataSourceTable = parseValue(opParameters,'exampleBlankDataSourceTable')
+    dataSourceFieldNames = parseList(opParameters,'dataSourceFieldNames')
+    listFCsToIgnore = parseList(opParameters,'listFCsToIgnore')
+    mergedTable = parseValue(opParameters,'mergedTable')
 
 makeTopology = parseValue(opParameters,'makeTopology')
-mainLineFileName = parseValue(opParameters,'mainLineFileName') #input for makeTopology - this the final name after any renaming
+if makeTopology: mainLineFileName = parseValue(opParameters,'mainLineFileName') #input for makeTopology - this the final name after any renaming
 
 calcIDNumbers = parseValue(opParameters,'calcIDNumbers')
 
@@ -526,7 +544,7 @@ if renameAllFields:
     for finalfds in listFDSInGDB: #this goes through all the FDS is that needed?
         listFCsinFinalFDS = arcpy.ListFeatureClasses(feature_dataset=finalfds)
         for finalfc in listFCsinFinalFDS:
-            fcpath = exportFDSFullPathNew + "\\" + finalfc
+            fcpath = exportFDSFullPathNew + "\\" + finalfc #TODO change FDS to finalfds
             print("   Feature Class for field renaming: " + finalfc)
             fieldsToRename = arcpy.ListFields(fcpath)
             for numb, field in enumerate(fieldsToRename):  # TODO no nead to enumerate
@@ -538,6 +556,14 @@ if renameAllFields:
                     print("     >" + field.name + " renamed to: " + newfieldname)
                 else:
                     print("      Did not need to rename: " + field.name)
+            if renameSpecific and finalfc in listSpecificFCsToRename:
+                print(listSpecificFieldsToRename)
+                renameIdx = listSpecificFCsToRename.index(finalfc)
+                print(renameIdx)
+                oldName = listSpecificFieldsToRename[renameIdx][0]
+                newName = listSpecificFieldsToRename[renameIdx][1]
+                print(oldName + " " + newName)
+                arcpy.AlterField_management(fcpath, oldName, newName)
 
 if crossWalkFields:
     print("Crosswalking fields...")
