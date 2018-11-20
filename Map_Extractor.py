@@ -134,7 +134,6 @@ inputFDSFullPath = inputDBPath + "\\" + inputFDSName
 print("FDS to be copied: "+inputFDSFullPath)
 inquad = parseValue(inParameters,'inquad') #Will look for polygons with 'yes' in the 'Build' attribute
 
-
 #######################################################################################################################
 #Import Export Details From Excel Sheet
 exParameters= pandas.read_excel(parametersExcelFilePath, sheetname='ExportDestinations',skiprows=1)
@@ -240,13 +239,15 @@ buildDataSources = parseValue(opParameters,'buildDataSources')#This will overwri
 if buildDataSources:
     getDataSourceFromFCs = parseValue(opParameters,'getDataSourceFromFCs') #Secondary option in buildDataSources
     listFCsWithDataSourceInformation = parseList(opParameters,'listFCsWithDataSourceInformation')
+    mergedTable = parseValue(opParameters,'mergedTable')
     getDataSourceFromExcel= parseValue(opParameters,'getDataSourceFromExcel') #Secondary option in buildDataSources
     extraDataSources = parseValue(opParameters,'extraDataSources')
+    mergedTableAll = parseValue(opParameters,'mergedTableAll')
     #The code assumes the following is in GEMS format (build using GEMS toolbox - Create New Database)
     exampleBlankDataSourceTable = parseValue(opParameters,'exampleBlankDataSourceTable')
     dataSourceFieldNames = parseList(opParameters,'dataSourceFieldNames')
     listFCsToIgnore = parseList(opParameters,'listFCsToIgnore')
-    mergedTable = parseValue(opParameters,'mergedTable')
+
 
 makeTopology = parseValue(opParameters,'makeTopology')
 if makeTopology: mainLineFileName = parseValue(opParameters,'mainLineFileName') #input for makeTopology - this the final name after any renaming
@@ -443,7 +444,7 @@ if nullFields:
     print("Null out fields...")
     for s, fctonull in enumerate(listFCsToNull):
         print(" Feature class to null: " + fctonull)
-        fcFullPathN = exportFDSFullPathNew + "\\" + fctonull
+        fcFullPathN = exportFDSFullPathNew + "\\" + fctonull #TODO this will only go through the newly extracted FDS, consider
         #print("  " + fcFullPathN)
         for fieldname in listFieldToNull[s]:
             if len(arcpy.ListFields(fctonull, fieldname)) > 0:  # Make sure the field exists
@@ -709,6 +710,16 @@ if buildDataSources:
         master_Authors = master_Authors + df2['AUTHORS'].values.tolist()
         master_URL = master_URL + df2['SOURCEURL'].values.tolist()
         master_Reference = master_Reference + df2['REFERENCE'].values.tolist()
+
+    if getDataSourceFromExcel and getDataSourceFromFCs:
+        writer = pandas.ExcelWriter(mergedTableAll)
+        header = pandas.DataFrame(["FOLDERNAME","AUTHORS","SOURCEURL","REFERENCE"]).T
+        header.to_excel(writer,'Sheet1',header=False,index=False)
+        pandas.DataFrame([master_DataSourceID]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1,startcol=0)
+        pandas.DataFrame([master_Authors]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1,startcol=1)
+        pandas.DataFrame([master_URL]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1, startcol=2)
+        pandas.DataFrame([master_Reference]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1,startcol=3)
+        writer.save()
 
     # print(master_DataSourceID)
     # print(master_Reference)
