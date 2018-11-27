@@ -108,7 +108,7 @@ def parseList(df,col):
 arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
-parametersExcelFilePath = r"extractorParametersCARR.xlsx"
+parametersExcelFilePath = r"extractorParametersSMSE.xlsx"
 #######################################################################################################################
 #Import Export Details From Excel Sheet
 
@@ -220,6 +220,7 @@ if renameSpecific:
 
 crossWalkFields = parseValue(opParameters,'crossWalkFields')
 if crossWalkFields:
+    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
     txtFile = parseValue(opParameters,'txtFile')
     listFCsSwitchTypeAndSymbol = parseList(opParameters,'listFCsSwitchTypeAndSymbol')
 
@@ -248,14 +249,26 @@ if buildDataSources:
     dataSourceFieldNames = parseList(opParameters,'dataSourceFieldNames')
     listFCsToIgnore = parseList(opParameters,'listFCsToIgnore')
 
+buildDMU = parseValue(opParameters,'buildDMU')
+if buildDMU:
+    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\MapExtractor\SchemaConvert.pyt")
+    mapUnitTable= parseValue(opParameters,'mapUnitTable')
+    exampleBlankDMUTable= parseValue(opParameters,'exampleBlankDMUTable')
+    nullDescription= parseValue(opParameters,'nullDescription')
+    nullFillPattern= parseValue(opParameters,'nullFillPattern')
+    calculateIDs= parseValue(opParameters,'calculateIDs')
+    descriptionSourceID= parseValue(opParameters,'descriptionSourceID')
 
 makeTopology = parseValue(opParameters,'makeTopology')
 if makeTopology: mainLineFileName = parseValue(opParameters,'mainLineFileName') #input for makeTopology - this the final name after any renaming
 
 calcIDNumbers = parseValue(opParameters,'calcIDNumbers')
+if calcIDNumbers:
+    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
 
 validateDataBase = parseValue(opParameters,'validateDataBase')
-
+if validateDataBase:
+    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
 #######################################################################################################################
 #Some Naming stuff
 print("--------------------------------------------")
@@ -568,7 +581,7 @@ if renameAllFields:
 
 if crossWalkFields:
     print("Crosswalking fields...")
-    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
+
     for finalfds2 in listFDSInGDB:
         listFCsinFinalFDS2 = arcpy.ListFeatureClasses(feature_dataset=finalfds2)
         for finalfc2 in listFCsinFinalFDS2:
@@ -577,7 +590,7 @@ if crossWalkFields:
             if finalfc2 in listFCsSwitchTypeAndSymbol:
                 print(" Switching Type to Symbol for: " +finalfc2)
                 arcpy.CalculateField_management(fcpath2, "Symbol", "[Type]")
-
+    #Note: AttributeByKeyValues fails when other FCs are in the text file
     arcpy.AttributeByKeyValues_GEMS(exportGDBFullPath, txtFile, True)
 
 if changeFieldType:
@@ -788,6 +801,15 @@ if buildDataSources:
             cursor2.insertRow([ForTable_MissingDataSources[x]])
         del cursor2
 
+if buildDMU:
+    arcpy.buildDMUFramework_SchemaConvert(MasterMapUnitTable=mapUnitTable,
+                                          gdb=exportGDBFullPath,
+                                          exampleBlankDMUTable=exampleBlankDMUTable,
+                                          NullDescription=str(nullDescription),
+                                          NullPattern=str(nullFillPattern),
+                                          calcIDs=str(calcIDNumbers),
+                                          descSourceID=descriptionSourceID)
+
 if makeTopology:
     print("Making topology...")
     TopologyName = 'GeologicMap_Topology'
@@ -832,12 +854,11 @@ if calcIDNumbers:
                                           field_type="TEXT",
                                           field_length=50)
     print("Calcing ID fields...")
-    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
+
     arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=exportGDBFullPath,Use_GUIDs="false", Do_not_reset_DataSource_IDs="true")
 
 if validateDataBase:
     print("Validating the database...")
-    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
     arcpy.ValidateDatabase_GEMS(
         Input_geodatabase=exportGDBFullPath,
         Output_workspace="")

@@ -1,5 +1,6 @@
 import arcpy
 import pandas
+import numpy
 
 class Toolbox (object):
     def __init__(self):
@@ -9,13 +10,13 @@ class Toolbox (object):
         self.alias = "SchemaConvert"
 
         # List of tool classes associated with this toolbox
-        self.tools = [DropFields,RenameFields,NullFields,PopulateMapUnitConfidence,BuildDataSources,BuildGlossary,]
+        self.tools = [dropFields, renameFields, nullFields, buildDataSources, buildGlossary, populateMapUnitConfidence, buildDMUFramework]
 
-class DropFields(object):
+class dropFields(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "DropFields"
-        self.description = "aasdasdsa"
+        self.description = ""
         self.canRunInBackground = False
 
     def getParameterInfo(self):
@@ -54,7 +55,6 @@ class DropFields(object):
 
     def execute(self, parameters, messages):
         """The source code of the tool."""
-
         #Inputs
         arcpy.env.overwriteOutput = True
         fds = parameters[1].valueAsText
@@ -78,11 +78,9 @@ class DropFields(object):
                 else:
                     arcpy.AddMessage("      Did not need to drop: " + field.name)
         arcpy.env.overwriteOutput = False
-
         return
 
-
-class RenameFields(object):
+class renameFields(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "RenameFields"
@@ -155,7 +153,7 @@ class RenameFields(object):
 
         return
 
-class NullFields(object):
+class nullFields(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "NullFields"
@@ -226,7 +224,7 @@ class NullFields(object):
         arcpy.env.overwriteOutput = False
         return
 
-class BuildDataSources(object):
+class buildDataSources(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "BuildDataSources"
@@ -349,7 +347,7 @@ class BuildDataSources(object):
         arcpy.env.overwriteOutput = False
         return
 
-class BuildGlossary(object):
+class buildGlossary(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "BuildGlossary"
@@ -465,7 +463,7 @@ class BuildGlossary(object):
         arcpy.env.overwriteOutput = False
         return
 
-class PopulateMapUnitConfidence(object):
+class populateMapUnitConfidence(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "PopulateMapUnitConfidence"
@@ -552,3 +550,200 @@ class PopulateMapUnitConfidence(object):
                     edit.stopOperation()
                     edit.stopEditing(True)
         arcpy.env.overwriteOutput = False
+
+class buildDMUFramework(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "BuildDMUFramework"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="Excel Table with Master List of MapUnits:",
+            name="MasterMapUnitTable",
+            datatype="DEFile",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Geodatabase:",
+            name="gdb",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
+            displayName="DMU Table Template:",
+            name="exampleBlankDMUTable",
+            datatype="DETable",
+            parameterType="Required",
+            direction="Input")
+
+        param3 = arcpy.Parameter(
+            displayName="Null Description Field",
+            name="NullDescription",
+            datatype="Boolean",
+            parameterType="Optional",
+            direction="Input")
+
+        param4 = arcpy.Parameter(
+            displayName="Null Areal Fill Pattern Description Field",
+            name="NullPattern",
+            datatype="Boolean",
+            parameterType="Optional",
+            direction="Input")
+
+        param5 = arcpy.Parameter(
+            displayName="Calculate IDs",
+            name="calcIDs",
+            datatype="Boolean",
+            parameterType="Optional",
+            direction="Input")
+
+        param6 = arcpy.Parameter(
+            displayName="DescriptionSourceID for all entries:",
+            name="descSourceID",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        params = [param0, param1, param2,param3,param4,param5,param6]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        # Inputs
+
+        masterDMUTable = parameters[0].valueAsText
+        gdb = parameters[1].valueAsText
+        nullDescription = parameters[3].valueAsText
+        nullFillPattern = parameters[4].valueAsText
+        calcIDs = parameters[5].valueAsText
+        descSourceID =parameters[6].valueAsText
+        arcpy.AddMessage(descSourceID)
+        arcpy.AddMessage(type(descSourceID))
+
+        arcpy.env.overwriteOutput = True
+        arcpy.AddMessage("Building DMU table...")
+        dfG = pandas.read_excel(masterDMUTable)
+        header=list(dfG.columns.values)
+
+        master_MapUnit = dfG['MapUnit'].values.tolist()
+        master_UnitName = dfG['Name'].values.tolist()
+        master_Age = dfG['Age'].values.tolist()
+        master_FullName = dfG['FullName'].values.tolist()
+        master_Order = dfG['DMUOrder'].values.tolist()
+        master_ParagraphStyle = dfG['ParagraphStyle'].values.tolist()
+        master_Label = dfG['Label'].values.tolist()
+        master_GeoMaterial = dfG['GeoMaterial'].values.tolist()
+        master_GeoMConfidence = dfG['GeoMaterialConfidence'].values.tolist()
+
+        arcpy.env.workspace = gdb
+        listFDSinGDB = arcpy.ListDatasets()
+        MapUnitsInMap = set([])
+
+        for fds in listFDSinGDB:
+            listFCsinFDS = arcpy.ListFeatureClasses(feature_dataset=fds)
+            arcpy.AddMessage("   Looking Through Feature Dataset: " + fds)
+            for fc in listFCsinFDS:
+                arcpy.AddMessage("      Looking Through Feature Class: " + fc)
+                Terms = ["MapUnit"]  # Expand this to look for other needed Glossary Terms if Needed
+                # Currently focused on finding "Type" in ContactsAndFaults
+                for term in Terms:
+                    if len(arcpy.ListFields(fc, term)) > 0:
+                        arcpy.AddMessage("        " + str(fc) + " has field: " + term)
+                        arcpy.Frequency_analysis(fc, "in_memory/freq", term)
+                        with arcpy.da.SearchCursor("in_memory/freq", term) as cursor:
+                            for row in cursor:
+                                MapUnitsInMap.add(row[0])
+
+        arcpy.AddMessage(str(MapUnitsInMap))
+        # Make a copy of the reference table
+
+        DMUTablePath = gdb + "\\" + "DescriptionOfMapUnits"
+        arcpy.Copy_management(parameters[2].valueAsText, DMUTablePath)
+        #arcpy.DeleteRows_management(gdb + "\\" + "Glossary")  # Empty the table
+        # Create some blank lists for filling
+        ForTable_MapUnit = []
+        ForTable_UnitName = []
+        ForTable_Age = []
+        ForTable_FullName = []
+        ForTable_Order = []
+        ForTable_MissingMapUnit = []
+        ForTable_ParagraphStyle = []
+        ForTable_Label = []
+        ForTable_GeoMaterial = []
+        ForTable_GeoMaterialConfidence = []
+
+        for mapunit in MapUnitsInMap:
+            if mapunit in master_MapUnit:
+                arcpy.AddMessage("   Term: " + mapunit + " is in master!")
+                index = master_MapUnit.index(mapunit)
+                ForTable_Age.append(master_Age[index])
+                ForTable_UnitName.append(master_UnitName[index])
+                ForTable_MapUnit.append(mapunit)
+                ForTable_FullName.append(master_FullName[index])
+                ForTable_Order.append(master_Order[index])
+                ForTable_ParagraphStyle.append(master_ParagraphStyle[index])
+                ForTable_Label.append(master_Label[index])
+                ForTable_GeoMaterial.append(master_GeoMaterial[index])
+                ForTable_GeoMaterialConfidence.append(master_GeoMConfidence[index])
+            else:
+                arcpy.AddMessage("  >Term: " + mapunit + " is NOT in the master. Update!!!")
+                ForTable_MissingMapUnit.append(mapunit)
+        # Update the table
+        # Assumes/requires GEMS field names
+        #arcpy.AddField_management(gdb + "\\" + "DescriptionOfMapUnits","TempOrder","Integer")
+        cursor = arcpy.da.InsertCursor(DMUTablePath,
+                                       ['MapUnit', 'Name', 'Age','FullName','HierarchyKey','ParagraphStyle','Label',
+                                        'GeoMaterial','GeoMaterialConfidence'])
+        for i, item in enumerate(ForTable_MapUnit):
+            cursor.insertRow([ForTable_MapUnit[i], ForTable_UnitName[i], ForTable_Age[i], ForTable_FullName[i],
+                              ForTable_Order[i], ForTable_ParagraphStyle[i], ForTable_Label[i], ForTable_GeoMaterial[i],
+                              ForTable_GeoMaterialConfidence[i]
+                              ])
+        del cursor
+
+        if len(ForTable_MissingMapUnit) > 0:
+            # Add the missing datasourceIDs
+            cursor2 = arcpy.da.InsertCursor(DMUTablePath, ['MapUnit'])
+            for x, item2 in enumerate(ForTable_MissingMapUnit):
+                cursor2.insertRow([ForTable_MissingMapUnit[x]])
+            del cursor2
+
+        if nullDescription:
+            arcpy.AddMessage("Nulling the Description field...")
+            arcpy.CalculateField_management(DMUTablePath, 'Description', "NULL")
+
+        if nullFillPattern:
+            arcpy.AddMessage("Nulling the AreaFillPatternDescription field...")
+            arcpy.CalculateField_management(DMUTablePath, 'AreaFillPatternDescription', "NULL")
+
+        if calcIDs:
+            arcpy.AddMessage("Calculating DescriptionOfMapUnits IDs...")
+            arcpy.CalculateField_management(DMUTablePath,'DescriptionOfMapUnits_ID',"\"DMU\"&[OBJECTID]")
+
+        if isinstance(descSourceID, unicode):
+            arcpy.AddMessage("Assigning Source IDs...")
+            arcpy.CalculateField_management(DMUTablePath,'DescriptionSourceID',"\""+descSourceID+"\"")
+
+        arcpy.env.overwriteOutput = False
+        return
