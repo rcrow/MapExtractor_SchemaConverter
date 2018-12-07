@@ -760,20 +760,25 @@ class buildGlossary(object):
         Terms = ["Type", "IdentityConfidence", "ExistenceConfidence", "ScientificConfidence", "ParagraphStyle",
                  "GeoMaterialConfidence", "Scale", "AgeUnits","OrigUnit"]
         if onlyTables == 'true':
-            arcpy.AddMessage("   Looking Through Tables Only")
+            arcpy.AddMessage("  Looking Through Tables Only")
             listTablesinGDB = arcpy.ListTables()
             # arcpy.AddMessage(listTablesinGDB)
             #TODO The code block below is repreated consider wrapping in a fucntion
             for table in listTablesinGDB:
-                # Currently focused on finding "Type" in ContactsAndFaults
-                for term in Terms:
-                    arcpy.AddMessage(arcpy.ListFields(table, term))
-                    if len(arcpy.ListFields(table, term)) > 0:
-                        arcpy.AddMessage(" " + str(table) + " has field: " + term)
-                        arcpy.Frequency_analysis(table, "in_memory/freq", term)
-                        with arcpy.da.SearchCursor("in_memory/freq", term) as cursor:
-                            for row in cursor:
-                                TermsInMap.add(row[0])
+                if table not in ['Glossary','GeoMaterialDict']:
+                    arcpy.AddMessage("   Looking Through Table: " + str(table))
+                    for term in Terms:
+                        #arcpy.AddMessage(arcpy.ListFields(table, term))
+                        if len(arcpy.ListFields(table, term)) > 0:
+                            arcpy.AddMessage("    -" + str(table) + " has field: " + term)
+                            arcpy.Frequency_analysis(table, "in_memory/freq", term)
+                            with arcpy.da.SearchCursor("in_memory/freq", term) as cursor:
+                                for row in cursor:
+                                    TermsInMap.add(row[0])
+                        else:
+                            arcpy.AddMessage("    " + term + " not in the table")
+                else:
+                    arcpy.AddMessage("   Ignoring Table: " + str(table))
         else:
             for fds in listFDSinGDB:
                 arcpy.AddMessage("   Looking Through Feature Dataset: " + fds)

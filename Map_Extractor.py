@@ -110,10 +110,19 @@ start = datetimePrint()[3]
 
 parametersExcelFilePath = r"extractorParametersSMSE.xlsx"
 #######################################################################################################################
+#Import Options From Excel Sheet
+toolParameters= pandas.read_excel(parametersExcelFilePath, sheetname='ToolPaths',skiprows=1)
+#print(toolParameters)
+print("--------------------------------------------")
+print("Toolboxes being used: ")
+pathToGeMSToolB=parseValue(toolParameters,'pathToGeMSToolB')
+arcpy.ImportToolbox(pathToGeMSToolB)
+pathToSchemaConvertToolB = parseValue(toolParameters,'pathToSchemaConvertToolB')
+arcpy.ImportToolbox(pathToSchemaConvertToolB)
+#######################################################################################################################
 #Import Export Details From Excel Sheet
-
 inParameters= pandas.read_excel(parametersExcelFilePath, sheetname='MainInputs',skiprows=1)
-# print(inParameters)
+#print(inParameters)
 print("--------------------------------------------")
 print("Input parameters being used: ")
 #These feature classes with be "clipped" to the quad boundary with clip
@@ -220,7 +229,6 @@ if renameSpecific:
 
 crossWalkFields = parseValue(opParameters,'crossWalkFields')
 if crossWalkFields:
-    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
     txtFile = parseValue(opParameters,'txtFile')
     listFCsSwitchTypeAndSymbol = parseList(opParameters,'listFCsSwitchTypeAndSymbol')
 
@@ -251,7 +259,7 @@ if buildDataSources:
 
 buildDMU = parseValue(opParameters,'buildDMU')
 if buildDMU:
-    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\MapExtractor\SchemaConvert.pyt")
+
     mapUnitTable= parseValue(opParameters,'mapUnitTable')
     exampleBlankDMUTable= parseValue(opParameters,'exampleBlankDMUTable')
     nullDescription= parseValue(opParameters,'nullDescription')
@@ -263,12 +271,11 @@ makeTopology = parseValue(opParameters,'makeTopology')
 if makeTopology: mainLineFileName = parseValue(opParameters,'mainLineFileName') #input for makeTopology - this the final name after any renaming
 
 calcIDNumbers = parseValue(opParameters,'calcIDNumbers')
-if calcIDNumbers:
-    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
 
 validateDataBase = parseValue(opParameters,'validateDataBase')
-if validateDataBase:
-    arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\GEMS_Tools\GeMS_ToolsArc10.tbx")
+
+populateLabelFromFeatureLinks = parseValue(opParameters,'populateLabelFromFeatureLinks')
+
 #######################################################################################################################
 #Some Naming stuff
 print("--------------------------------------------")
@@ -402,14 +409,80 @@ for fcToRename in listFCsToRename:
 #######################################################################################################################
 #OPTIONS
 print("--------------------------------------------")
+if populateLabelFromFeatureLinks:
+    print("Populating the Label field from the feature-linked annotations...")
+    arcpy.env.workspace = exportGDBFullPath
+    edit = arcpy.da.Editor(arcpy.env.workspace)
+    edit.startEditing(False, True)
+    edit.startOperation()
+    for i, anno in enumerate(listAnnos):
+        annoPath = exportFDSFullPathNew + "\\" + anno
+        with arcpy.da.SearchCursor(annoPath,
+                                   ["featureid", "textstring"]) as cursor:  # Note lowercase names from postgres
+            listFeatureIds = []
+            listLabels = []
+            for row in cursor:
+                listFeatureIds.append(row[0])
+                listLabels.append(row[1])
+        fcPath = exportFDSFullPathNew + "\\" + listFCsToSelectByLocation[i]
+        with arcpy.da.UpdateCursor(fcPath, ["objectid", "label"]) as editcursor:
+            for editrow in editcursor:
+                if editrow[0] in listFeatureIds:
+                    index = listFeatureIds.index(editrow[0])
+                    editrow[1] = listLabels[index]
+                    editcursor.updateRow(editrow)
+    edit.stopOperation()
+    edit.stopEditing(True)
+
+if calcIDNumbers:
+    print("Adding ID fields...")
+    #Make sure the FCs have the needed fields
+    arcpy.env.workspace = exportGDBFullPath
+    listFDSInGDB = arcpy.ListDatasets()
+    for finalfds in listFDSInGDB:  # this goes through all the FDS is that needed?
+        listFCsinFinalFDS = arcpy.ListFeatureClasses(feature_dataset=finalfds)
+        for finalfc in listFCsinFinalFDS:
+            fcpath = exportGDBFullPath + "\\" + finalfds + "\\" + finalfc
+            print(" Feature Class: " + finalfc)
+            fieldsInFC = arcpy.ListFields(fcpath)
+            fieldNamesinFC = [x.name for x in fieldsInFC]
+            # print(fieldNamesinFC)
+            if finalfc + "_ID" in fieldNamesinFC:
+                print("  The ID field is already present in: " + finalfc)
+            else:
+                print("  Adding the ID field to: " + finalfc)
+                arcpy.AddField_management(in_table=fcpath,
+                                          field_name=finalfc + "_ID",
+                                          field_type="TEXT",
+                                          field_length=50)
+    print("Calcing ID fields...")
+    arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=exportGDBFullPath,Use_GUIDs="false", Do_not_reset_DataSource_IDs="true")
+
+
 if buildPolygons:
     print("Building polygons...")
     #Build polygons lines MUST be labeled ContactsAndFault and points MapUnitPoints
+    print("  Populating symbol in MapUnit Points...")
+    arcpy.CalculateField_management(in_table=exportFDSFullPathNew+"\\"+'MapUnitPoints',
+                                    field='symbol',
+                                    expression='[mapunit]',
+                                    expression_type='VB',
+                                    code_block="")
     arcpy.FeatureToPolygon_management(in_features=exportFDSFullPathNew+"\\"+'ContactsAndFaults',
                                           out_feature_class=exportFDSFullPathNew+"\\"+'MapUnitPolys',
                                           cluster_tolerance="#",
                                           attributes="ATTRIBUTES",
                                           label_features=exportFDSFullPathNew+"\\"+'MapUnitPoints')
+    arcpy.AddField_management(in_table=exportFDSFullPathNew+"\\"+'MapUnitPolys',
+                              field_name="MapUnitPolys_ID",
+                              field_type="TEXT",
+                              field_length=50)
+    print("  Populating symbol in MapUnit Polys...")
+    arcpy.CalculateField_management(in_table=exportFDSFullPathNew+"\\"+'MapUnitPolys',
+                                    field='symbol',
+                                    expression='[mapunit]',
+                                    expression_type='VB',
+                                    code_block="")
 
 if simplifyGeomorphLines:
     print("Simplifying the geomorph lines...")
@@ -439,7 +512,7 @@ if makeTables:
                                      field)
 
 if dropFields:
-    print("Drop fields...")
+    print("Dropping fields...")
     for x, fctodrop in enumerate(listFCsToDropFldsFrom):
         #print(fctodrop)
         fcFullPath = exportFDSFullPathNew + "\\" + fctodrop
@@ -454,7 +527,7 @@ if dropFields:
             arcpy.DeleteField_management(fcFullPath, listFieldToDrop[x])
 
 if nullFields:
-    print("Null out fields...")
+    print("Nulling out fields...")
     for s, fctonull in enumerate(listFCsToNull):
         print(" Feature class to null: " + fctonull)
         fcFullPathN = exportFDSFullPathNew + "\\" + fctonull #TODO this will only go through the newly extracted FDS, consider
@@ -507,7 +580,7 @@ if nullFields:
                 print("Field name: " + fieldname + " does not exist")
 
 if addExtraTable:
-    print("Add extra tables...")
+    print("Adding extra tables...")
     for extraTable in listExtraTables:
         arcpy.Copy_management(inputExtraTablePathGDB + "\\" + extraTable, exportGDBFullPath + "\\" + extraTable)
         print ("  Copying " + extraTable)
@@ -567,21 +640,21 @@ if renameAllFields:
                     newfieldname = gemsFieldNames[sdeFieldNames.index(field.name)]
                     arcpy.AlterField_management(fcpath, field.name,"zzzz")  # Without this simple case changes are not always recognized
                     arcpy.AlterField_management(fcpath, "zzzz", newfieldname)
-                    print("     >" + field.name + " renamed to: " + newfieldname)
+                    print("     -" + field.name + " renamed to: " + newfieldname)
                 else:
                     print("      Did not need to rename: " + field.name)
             if renameSpecific and finalfc in listSpecificFCsToRename:
-                print(listSpecificFieldsToRename)
+                print("     Renaming Field in Specific FC...")
+                #print(listSpecificFieldsToRename)
                 renameIdx = listSpecificFCsToRename.index(finalfc)
-                print(renameIdx)
+                #print(renameIdx)
                 oldName = listSpecificFieldsToRename[renameIdx][0]
                 newName = listSpecificFieldsToRename[renameIdx][1]
-                print(oldName + " " + newName)
+                print("       Old name: "+oldName + " New name: " + newName)
                 arcpy.AlterField_management(fcpath, oldName, newName)
 
 if crossWalkFields:
     print("Crosswalking fields...")
-
     for finalfds2 in listFDSInGDB:
         listFCsinFinalFDS2 = arcpy.ListFeatureClasses(feature_dataset=finalfds2)
         for finalfc2 in listFCsinFinalFDS2:
@@ -604,7 +677,7 @@ if changeFieldType:
             listfieldsfortypechange = arcpy.ListFields(fcpath)
             for fieldtype in listfieldsfortypechange:
                 if fieldtype.name in listFieldsToChange:
-                    print("     >" + fieldtype.name + " type changing to: " + newType)
+                    print("     -" + fieldtype.name + " type changing to: " + newType)
                     arcpy.AddField_management(fcpath, "temp", newType)
                     #print(fieldtype.name)
                     arcpy.env.workspace = exportGDBFullPath
@@ -642,60 +715,15 @@ if crossWalkPolyAndPoints:
                 edit.stopEditing(True)
 
 if buildGlossary:
-    print("Building Glossary table...")
-    dfG = pandas.read_excel(glossaryTable)
-    master_Terms = dfG['Term'].values.tolist()
-    master_Definitions = dfG['Definition'].values.tolist()
-    master_DefinitionSouces = dfG['DefinitionSourceID'].values.tolist()
-    arcpy.env.workspace = exportFDSFullPathNew
-    listFCs = arcpy.ListFeatureClasses() #Only works in the Geologic Map FDS
-    TermsInMap = set([])
-    Terms = ["Type"] #Expand this to look for other needed Glossary Terms if Needed
-    #Currently focused on finding "Type" in ContactsAndFaults
-    for fc in listFCs:
-        for term in Terms:
-            if len(arcpy.ListFields(fc, term)) > 0:
-                print(" "+str(fc) + " has field: " + term)
-                arcpy.Frequency_analysis(fc, "in_memory/freq", term)
-                with arcpy.da.SearchCursor("in_memory/freq", term) as cursor:
-                    for row in cursor:
-                        TermsInMap.add(row[0])
-                    # print("  "+str(row[0]))
-    # print(DataSourcesInMap)
-
-    # Make a copy og the reference table
-    arcpy.Copy_management(exampleBlankGlossaryTable, exportGDBFullPath + "//" + "Glossary")
-    # Create some blank lists for filling
-    ForTable_Terms = []
-    ForTable_Def = []
-    ForTable_GSources = []
-    ForTable_MissingTerms = []
-    for terminmap in TermsInMap:
-        if terminmap  in master_Terms:
-            print("   Term: " + terminmap + " is in master!")
-            index = master_Terms.index(terminmap)
-            ForTable_Def.append(master_Definitions[index])
-            ForTable_GSources.append(master_DefinitionSouces[index])
-            ForTable_Terms.append(terminmap)
-        else:
-            print("  >Term: " + terminmap + " is NOT in the master. Update!!!")
-            ForTable_MissingTerms.append(terminmap)
-    # Update the table
-    # Assumes/requires GEMS field names
-    cursor = arcpy.da.InsertCursor(exportGDBFullPath + "\\" + "Glossary", ['Term', 'Definition','DefinitionSourceID'])
-    for i, item in enumerate(ForTable_Terms):
-        cursor.insertRow([ForTable_Terms[i], ForTable_Def[i], ForTable_GSources[i]])
-    del cursor
-
-    if len(ForTable_MissingTerms) > 0:
-        # Add the missing datasourceIDs
-        cursor2 = arcpy.da.InsertCursor(exportGDBFullPath + "\\" + "Glossary", ['Term'])
-        for x, item2 in enumerate(ForTable_MissingTerms):
-            cursor2.insertRow([ForTable_MissingTerms[x]])
-        del cursor2
+    arcpy.buildGlossary_SchemaConvert(
+        glossaryTable=glossaryTable,
+        gdb=exportGDBFullPath,
+        exampleBlankGlossaryTable=exampleBlankGlossaryTable,
+        onlyTables="")
 
 if buildDataSources:
     print("Building DataSources table...")
+    arcpy.env.overwriteOutput = True
     # Merge all the footprints to get a master list of datasources
     mergedFCs = r"in_memory\mergedFCs"
     arcpy.Merge_management(listFCsWithDataSourceInformation, mergedFCs)
@@ -734,81 +762,118 @@ if buildDataSources:
         pandas.DataFrame([master_Reference]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1,startcol=3)
         writer.save()
 
-    # print(master_DataSourceID)
-    # print(master_Reference)
+    arcpy.buildDataSources_SchemaConvert(
+        masterDataSourcesTable=mergedTableAll,
+        gdb=exportGDBFullPath,
+        exampleBlankDataSourceTable=exampleBlankDataSourceTable,
+        onlyTables="")
 
-    # List all the FCs in the map or db
-    arcpy.env.workspace = exportFDSFullPathNew
-    #print(arcpy.env.workspace)
-    listFCs = arcpy.ListFeatureClasses()
-    arcpy.env.workspace = exportGDBFullPath
-    listTables = arcpy.ListTables()
-    listToGoThrough = listFCs + listTables
-    #print(listToGoThrough)
-
-    # Remove FCs to ignore
-    for fctoignore in listFCsToIgnore:
-        if fctoignore in listToGoThrough:
-            listToGoThrough.remove(fctoignore)
-            print(" Ignore: " + fctoignore)
-    # print(listFCs)
-
-    # Generate a list (set) with all the datasourceids
-    DataSourcesInMap = set([])
-    for fc in listToGoThrough:
-        for datasourcename in dataSourceFieldNames:
-            if len(arcpy.ListFields(fc, datasourcename)) > 0:
-                print(" "+str(fc) + " has field: " + datasourcename)
-                arcpy.Frequency_analysis(fc, "in_memory/freq", datasourcename)
-                with arcpy.da.SearchCursor("in_memory/freq", datasourcename) as cursor:
-                    for row in cursor:
-                        DataSourcesInMap.add(row[0])
-                    # print("  "+str(row[0]))
-    # print(DataSourcesInMap)
-
-    # Make a copy og the reference table
-    arcpy.Copy_management(exampleBlankDataSourceTable, exportGDBFullPath + "//" + "DataSources")
-    # Create some blank lists for filling
-    ForTable_Source = []
-    ForTable_URL = []
-    ForTable_DataSources = []
-    ForTable_MissingDataSources = []
-    for dataSource in DataSourcesInMap:
-        #This assumes that FGDC-STD-013-2006 will be in the table when it's copied over - don't put it in again
-        if dataSource in master_DataSourceID and dataSource <> "FGDC-STD-013-2006":
-            print("   Data source: " + dataSource + " is in master!")
-            index = master_DataSourceID.index(dataSource)
-            ForTable_Source.append(master_Reference[index])
-            ForTable_URL.append(master_URL[index])
-            ForTable_DataSources.append(dataSource)
-        elif dataSource <> "FGDC-STD-013-2006":
-            print("  >Data source: " + dataSource + " is NOT in the master. Update!!!")
-            ForTable_MissingDataSources.append(dataSource)
-        else:
-            print("   Data source: FGDC-STD-013-2006 being ignored")
-
-    # Update the table
-    # Assumes/requires GEMS field names
-    cursor = arcpy.da.InsertCursor(exportGDBFullPath + "\\" + "DataSources", ['Source', 'URL', 'DataSources_ID'])
-    for i, item in enumerate(ForTable_DataSources):
-        cursor.insertRow([ForTable_Source[i], ForTable_URL[i], ForTable_DataSources[i]])
-    del cursor
-
-    if len(ForTable_MissingDataSources) > 0:
-        # Add the missing datasourceIDs
-        cursor2 = arcpy.da.InsertCursor(exportGDBFullPath + "\\" + "DataSources", ['DataSources_ID'])
-        for x, item2 in enumerate(ForTable_MissingDataSources):
-            cursor2.insertRow([ForTable_MissingDataSources[x]])
-        del cursor2
+    # # print(master_DataSourceID)
+    # # print(master_Reference)
+    #
+    # # List all the FCs in the map or db
+    # arcpy.env.workspace = exportFDSFullPathNew
+    # #print(arcpy.env.workspace)
+    # listFCs = arcpy.ListFeatureClasses()
+    # arcpy.env.workspace = exportGDBFullPath
+    # listTables = arcpy.ListTables()
+    # listToGoThrough = listFCs + listTables
+    # #print(listToGoThrough)
+    #
+    # # Remove FCs to ignore
+    # for fctoignore in listFCsToIgnore:
+    #     if fctoignore in listToGoThrough:
+    #         listToGoThrough.remove(fctoignore)
+    #         print(" Ignore: " + fctoignore)
+    # # print(listFCs)
+    #
+    # # Generate a list (set) with all the datasourceids
+    # DataSourcesInMap = set([])
+    # for fc in listToGoThrough:
+    #     for datasourcename in dataSourceFieldNames:
+    #         if len(arcpy.ListFields(fc, datasourcename)) > 0:
+    #             print(" "+str(fc) + " has field: " + datasourcename)
+    #             arcpy.Frequency_analysis(fc, "in_memory/freq", datasourcename)
+    #             with arcpy.da.SearchCursor("in_memory/freq", datasourcename) as cursor:
+    #                 for row in cursor:
+    #                     DataSourcesInMap.add(row[0])
+    #                 # print("  "+str(row[0]))
+    # # print(DataSourcesInMap)
+    #
+    # # Make a copy og the reference table
+    # arcpy.Copy_management(exampleBlankDataSourceTable, exportGDBFullPath + "//" + "DataSources")
+    # # Create some blank lists for filling
+    # ForTable_Source = []
+    # ForTable_URL = []
+    # ForTable_DataSources = []
+    # ForTable_MissingDataSources = []
+    # for dataSource in DataSourcesInMap:
+    #     #This assumes that FGDC-STD-013-2006 will be in the table when it's copied over - don't put it in again
+    #     if dataSource in master_DataSourceID and dataSource <> "FGDC-STD-013-2006":
+    #         print("   Data source: " + dataSource + " is in master!")
+    #         index = master_DataSourceID.index(dataSource)
+    #         ForTable_Source.append(master_Reference[index])
+    #         ForTable_URL.append(master_URL[index])
+    #         ForTable_DataSources.append(dataSource)
+    #     elif dataSource <> "FGDC-STD-013-2006":
+    #         print("  >Data source: " + dataSource + " is NOT in the master. Update!!!")
+    #         ForTable_MissingDataSources.append(dataSource)
+    #     else:
+    #         print("   Data source: FGDC-STD-013-2006 being ignored")
+    #
+    # # Update the table
+    # # Assumes/requires GEMS field names
+    # cursor = arcpy.da.InsertCursor(exportGDBFullPath + "\\" + "DataSources", ['Source', 'URL', 'DataSources_ID'])
+    # for i, item in enumerate(ForTable_DataSources):
+    #     cursor.insertRow([ForTable_Source[i], ForTable_URL[i], ForTable_DataSources[i]])
+    # del cursor
+    #
+    # if len(ForTable_MissingDataSources) > 0:
+    #     # Add the missing datasourceIDs
+    #     cursor2 = arcpy.da.InsertCursor(exportGDBFullPath + "\\" + "DataSources", ['DataSources_ID'])
+    #     for x, item2 in enumerate(ForTable_MissingDataSources):
+    #         cursor2.insertRow([ForTable_MissingDataSources[x]])
+    #     del cursor2
 
 if buildDMU:
+    if nullDescription:
+        nullDescription = 'true'
+    else:
+        nullDescription = ''
+    if nullFillPattern:
+        nullFillPattern = 'true'
+    else:
+        nullFillPattern = ''
+    if calcIDNumbers:
+        calcIDNumbers = 'true'
+    else:
+        calcIDNumbers = ''
     arcpy.buildDMUFramework_SchemaConvert(MasterMapUnitTable=mapUnitTable,
                                           gdb=exportGDBFullPath,
                                           exampleBlankDMUTable=exampleBlankDMUTable,
-                                          NullDescription=str(nullDescription),
-                                          NullPattern=str(nullFillPattern),
-                                          calcIDs=str(calcIDNumbers),
+                                          NullDescription=nullDescription,
+                                          NullPattern=nullFillPattern,
+                                          calcIDs=calcIDNumbers,
                                           descSourceID=descriptionSourceID)
+
+if buildGlossary:
+    #Go through the newly created tables now
+    print("Building Glossary table from tables...")
+    arcpy.buildGlossary_SchemaConvert(
+        glossaryTable=glossaryTable,
+        gdb=exportGDBFullPath,
+        exampleBlankGlossaryTable="",
+        onlyTables="true")
+
+if buildDataSources:
+    #No Glossary term in DataSources table so run this last
+    #Go through the newly created tables now
+    print("Building DataSources table from tables...")
+    arcpy.buildDataSources_SchemaConvert(
+        masterDataSourcesTable=mergedTableAll,
+        gdb=exportGDBFullPath,
+        exampleBlankDataSourceTable="",
+        onlyTables="true")
 
 if makeTopology:
     print("Making topology...")
@@ -833,28 +898,7 @@ if makeTopology:
     print("Topology done")
 
 if calcIDNumbers:
-    print("Adding ID fields...")
-    #Make sure the FCs have the needed fields
-    arcpy.env.workspace = exportGDBFullPath
-    listFDSInGDB = arcpy.ListDatasets()
-    for finalfds in listFDSInGDB:  # this goes through all the FDS is that needed?
-        listFCsinFinalFDS = arcpy.ListFeatureClasses(feature_dataset=finalfds)
-        for finalfc in listFCsinFinalFDS:
-            fcpath = exportGDBFullPath + "\\" + finalfds + "\\" + finalfc
-            print(" Feature Class: " + finalfc)
-            fieldsInFC = arcpy.ListFields(fcpath)
-            fieldNamesinFC = [x.name for x in fieldsInFC]
-            # print(fieldNamesinFC)
-            if finalfc + "_ID" in fieldNamesinFC:
-                print("  The ID field is already present in: " + finalfc)
-            else:
-                print("  Adding the ID field to: " + finalfc)
-                arcpy.AddField_management(in_table=fcpath,
-                                          field_name=finalfc + "_ID",
-                                          field_type="TEXT",
-                                          field_length=50)
     print("Calcing ID fields...")
-
     arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=exportGDBFullPath,Use_GUIDs="false", Do_not_reset_DataSource_IDs="true")
 
 if validateDataBase:
