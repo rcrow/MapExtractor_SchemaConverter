@@ -108,7 +108,7 @@ def parseList(df,col):
 arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
-parametersExcelFilePath = r"extractorParametersSMSE.xlsx"
+parametersExcelFilePath = r"extractorParametersCR.xlsx"
 #######################################################################################################################
 #Import Options From Excel Sheet
 toolParameters= pandas.read_excel(parametersExcelFilePath, sheetname='ToolPaths',skiprows=1)
@@ -129,8 +129,10 @@ print("Input parameters being used: ")
 listFCsToClip = parseList(inParameters,'listFCsToClip')
 #These feature classes with be "clipped" to the quad boundary using a select by location
 listFCsToSelectByLocation = parseList(inParameters,'listFCsToSelectByLocation')
+strlistFCsToSelectByLocation = parseValue(inParameters,'listFCsToSelectByLocation')
 #Annos
 listAnnos = parseList(inParameters,'listAnnos')
+strlistAnnos = parseValue(inParameters,'listAnnos')
 
 #These are the feature classes that will NOT be ignored
 listCoreFCs = listFCsToClip + listFCsToSelectByLocation
@@ -176,8 +178,9 @@ if nullFields:
 
 dropFields = parseValue(opParameters,'dropFields')
 if dropFields:
+    strlistFCsToDropFldsFrom = parseValue(opParameters,'listFCsToDropFldsFrom')
+    strlistFieldToDrop = parseValue(opParameters,'listFieldToDrop')
     listFCsToDropFldsFrom = parseList(opParameters,'listFCsToDropFldsFrom')
-    #This list of lists needs to be in the same order and the above list of FCs!
     listFieldToDrop = parsenestedlists(opParameters,'listFieldToDrop')
 
 addExtraTable = parseValue(opParameters,'addExtraTable')
@@ -409,7 +412,35 @@ for fcToRename in listFCsToRename:
 #######################################################################################################################
 #OPTIONS
 print("--------------------------------------------")
+if addCMULMU:
+    print("Adding CMU / LMU...")
+    arcpy.Copy_management(inputCMULMUPathFDS, exportGDBFullPath + "\\" + exportFDSCMULMU_Name)
+
+if addXSEC1:
+    print("Adding CrossSection A")
+    arcpy.Copy_management(inputXSECAPathFDS, exportGDBFullPath + "\\" + exportFDSXSEC1_Name)
+
+if addXSEC2:
+    print("Adding CrossSection B")
+    arcpy.Copy_management(inputXSECBPathFDS, exportGDBFullPath + "\\" + exportFDSXSEC2_Name)
+
+if addXSEC3:
+    print("Adding CrossSection C")
+    arcpy.Copy_management(inputXSECCPathFDS, exportGDBFullPath + "\\" + exportFDSXSEC3_Name)
+
+if addExtraFCs:
+    print("Adding extra FCs...")
+    for extraFC in listExtraFCs:
+        arcpy.Copy_management(inputExtraFCsPathFDS + "\\" + extraFC, exportFDSFullPathNew + "\\" + extraFC)
+
+
 if populateLabelFromFeatureLinks:
+    #TODO get this working through the toolbox
+    # arcpy.populateLabelFromFeatureLinks_SchemaConvert(
+    #     gdb=exportGDBName,
+    #     fds=exportFDSFullPathNew,
+    #     annos=strlistAnnos, fcs=strlistFCsToSelectByLocation, nullFirst='true')
+
     print("Populating the Label field from the feature-linked annotations...")
     arcpy.env.workspace = exportGDBFullPath
     edit = arcpy.da.Editor(arcpy.env.workspace)
@@ -425,6 +456,7 @@ if populateLabelFromFeatureLinks:
                 listFeatureIds.append(row[0])
                 listLabels.append(row[1])
         fcPath = exportFDSFullPathNew + "\\" + listFCsToSelectByLocation[i]
+        arcpy.CalculateField_management(fcPath, "label", "NULL")
         with arcpy.da.UpdateCursor(fcPath, ["objectid", "label"]) as editcursor:
             for editrow in editcursor:
                 if editrow[0] in listFeatureIds:
@@ -512,13 +544,14 @@ if makeTables:
                                      field)
 
 if dropFields:
-    print("Dropping fields...")
+    # arcpy.dropFieldsFromSpecific_SchemaConvert(listFCsToDropFldsFrom=strlistFCsToDropFldsFrom,
+    #                                            listFieldsToDrop=strlistFieldToDrop,
+    #                                            gdb=exportGDBFullPath)
+
     for x, fctodrop in enumerate(listFCsToDropFldsFrom):
         #print(fctodrop)
         fcFullPath = exportFDSFullPathNew + "\\" + fctodrop
-        #print(" " + fcFullPath)
-        #print("  Disabling Editor Tracking")
-        # Disable editor tracking for all feature classes, otherwise you can't delete those fields
+        # Note if you use different disable tracking field the following will have to be changes
         arcpy.DisableEditorTracking_management(fcFullPath, "DISABLE_CREATOR", "DISABLE_CREATION_DATE",
                                                "DISABLE_LAST_EDITOR", "DISABLE_LAST_EDIT_DATE")
         listfields=arcpy.ListFields(fcFullPath, listFieldToDrop[x])
@@ -585,27 +618,6 @@ if addExtraTable:
         arcpy.Copy_management(inputExtraTablePathGDB + "\\" + extraTable, exportGDBFullPath + "\\" + extraTable)
         print ("  Copying " + extraTable)
 
-if addCMULMU:
-    print("Adding CMU / LMU...")
-    arcpy.Copy_management(inputCMULMUPathFDS, exportGDBFullPath + "\\" + exportFDSCMULMU_Name)
-
-if addXSEC1:
-    print("Adding CrossSection A")
-    arcpy.Copy_management(inputXSECAPathFDS, exportGDBFullPath + "\\" + exportFDSXSEC1_Name)
-
-if addXSEC2:
-    print("Adding CrossSection B")
-    arcpy.Copy_management(inputXSECBPathFDS, exportGDBFullPath + "\\" + exportFDSXSEC2_Name)
-
-if addXSEC3:
-    print("Adding CrossSection C")
-    arcpy.Copy_management(inputXSECCPathFDS, exportGDBFullPath + "\\" + exportFDSXSEC3_Name)
-
-if addExtraFCs:
-    print("Adding extra FCs...")
-    for extraFC in listExtraFCs:
-        arcpy.Copy_management(inputExtraFCsPathFDS + "\\" + extraFC, exportFDSFullPathNew + "\\" + extraFC)
-
 if addDRG:
     print("Adding the DRG...")
     arcpy.env.workspace = exportGDBFullPath
@@ -631,7 +643,7 @@ if renameAllFields:
     for finalfds in listFDSInGDB: #this goes through all the FDS is that needed?
         listFCsinFinalFDS = arcpy.ListFeatureClasses(feature_dataset=finalfds)
         for finalfc in listFCsinFinalFDS:
-            fcpath = exportFDSFullPathNew + "\\" + finalfc #TODO change FDS to finalfds
+            fcpath = exportGDBFullPath + "\\" + finalfds + "\\" + finalfc
             print("   Feature Class for field renaming: " + finalfc)
             fieldsToRename = arcpy.ListFields(fcpath)
             for numb, field in enumerate(fieldsToRename):  # TODO no nead to enumerate
@@ -672,9 +684,11 @@ if changeFieldType:
     listFDSInGDB = arcpy.ListDatasets()
     for finalfds in listFDSInGDB:  # this goes through all the FDS is that needed?
         listFCsinFinalFDS = arcpy.ListFeatureClasses(feature_dataset=finalfds)
+        print("  Looking in FDS: " + str(finalfds))
         for finalfc in listFCsinFinalFDS:
-            fcpath = exportFDSFullPathNew + "\\" + finalfc
+            fcpath = exportGDBFullPath +"\\" + finalfds + "\\" + finalfc
             listfieldsfortypechange = arcpy.ListFields(fcpath)
+            print("    Looking in FC: " + str(finalfc))
             for fieldtype in listfieldsfortypechange:
                 if fieldtype.name in listFieldsToChange:
                     print("     -" + fieldtype.name + " type changing to: " + newType)
@@ -767,73 +781,6 @@ if buildDataSources:
         gdb=exportGDBFullPath,
         exampleBlankDataSourceTable=exampleBlankDataSourceTable,
         onlyTables="")
-
-    # # print(master_DataSourceID)
-    # # print(master_Reference)
-    #
-    # # List all the FCs in the map or db
-    # arcpy.env.workspace = exportFDSFullPathNew
-    # #print(arcpy.env.workspace)
-    # listFCs = arcpy.ListFeatureClasses()
-    # arcpy.env.workspace = exportGDBFullPath
-    # listTables = arcpy.ListTables()
-    # listToGoThrough = listFCs + listTables
-    # #print(listToGoThrough)
-    #
-    # # Remove FCs to ignore
-    # for fctoignore in listFCsToIgnore:
-    #     if fctoignore in listToGoThrough:
-    #         listToGoThrough.remove(fctoignore)
-    #         print(" Ignore: " + fctoignore)
-    # # print(listFCs)
-    #
-    # # Generate a list (set) with all the datasourceids
-    # DataSourcesInMap = set([])
-    # for fc in listToGoThrough:
-    #     for datasourcename in dataSourceFieldNames:
-    #         if len(arcpy.ListFields(fc, datasourcename)) > 0:
-    #             print(" "+str(fc) + " has field: " + datasourcename)
-    #             arcpy.Frequency_analysis(fc, "in_memory/freq", datasourcename)
-    #             with arcpy.da.SearchCursor("in_memory/freq", datasourcename) as cursor:
-    #                 for row in cursor:
-    #                     DataSourcesInMap.add(row[0])
-    #                 # print("  "+str(row[0]))
-    # # print(DataSourcesInMap)
-    #
-    # # Make a copy og the reference table
-    # arcpy.Copy_management(exampleBlankDataSourceTable, exportGDBFullPath + "//" + "DataSources")
-    # # Create some blank lists for filling
-    # ForTable_Source = []
-    # ForTable_URL = []
-    # ForTable_DataSources = []
-    # ForTable_MissingDataSources = []
-    # for dataSource in DataSourcesInMap:
-    #     #This assumes that FGDC-STD-013-2006 will be in the table when it's copied over - don't put it in again
-    #     if dataSource in master_DataSourceID and dataSource <> "FGDC-STD-013-2006":
-    #         print("   Data source: " + dataSource + " is in master!")
-    #         index = master_DataSourceID.index(dataSource)
-    #         ForTable_Source.append(master_Reference[index])
-    #         ForTable_URL.append(master_URL[index])
-    #         ForTable_DataSources.append(dataSource)
-    #     elif dataSource <> "FGDC-STD-013-2006":
-    #         print("  >Data source: " + dataSource + " is NOT in the master. Update!!!")
-    #         ForTable_MissingDataSources.append(dataSource)
-    #     else:
-    #         print("   Data source: FGDC-STD-013-2006 being ignored")
-    #
-    # # Update the table
-    # # Assumes/requires GEMS field names
-    # cursor = arcpy.da.InsertCursor(exportGDBFullPath + "\\" + "DataSources", ['Source', 'URL', 'DataSources_ID'])
-    # for i, item in enumerate(ForTable_DataSources):
-    #     cursor.insertRow([ForTable_Source[i], ForTable_URL[i], ForTable_DataSources[i]])
-    # del cursor
-    #
-    # if len(ForTable_MissingDataSources) > 0:
-    #     # Add the missing datasourceIDs
-    #     cursor2 = arcpy.da.InsertCursor(exportGDBFullPath + "\\" + "DataSources", ['DataSources_ID'])
-    #     for x, item2 in enumerate(ForTable_MissingDataSources):
-    #         cursor2.insertRow([ForTable_MissingDataSources[x]])
-    #     del cursor2
 
 if buildDMU:
     if nullDescription:

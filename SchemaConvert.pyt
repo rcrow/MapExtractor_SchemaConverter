@@ -1,6 +1,14 @@
 import arcpy
 import pandas
-import numpy
+
+def parsenestedlists(str):
+    templist = map(unicode.strip, str.split(","))
+    list = []
+    for item in templist:
+        nested = item.split("|")
+        list.append(nested)
+    arcpy.AddMessage(list)
+    return list
 
 class Toolbox (object):
     def __init__(self):
@@ -10,8 +18,8 @@ class Toolbox (object):
         self.alias = "SchemaConvert"
 
         # List of tool classes associated with this toolbox
-        self.tools = [dropFields, renameFields, nullFields, buildDataSources, buildGlossary,
-                      populateMapUnitConfidence, buildDMUFramework, geomorphUnitConverter]
+        self.tools = [dropFields, dropFieldsFromSpecific, renameFields, nullFields, buildDataSources, buildGlossary,
+                      populateMapUnitConfidence, buildDMUFramework, geomorphUnitConverter, populateLabelFromFeatureLinks]
 
 class dropFields(object):
     def __init__(self):
@@ -35,6 +43,8 @@ class dropFields(object):
             datatype="DEFeatureDataset",
             parameterType="Required",
             direction="Input")
+
+        #TODO add optional parameter that allows for work on only specific FCs
 
         params = [param0, param1]
         return params
@@ -63,7 +73,7 @@ class dropFields(object):
         listFieldToDrop = map(unicode.strip, parameters[0].valueAsText.split(","))
 
         arcpy.AddMessage(str(listFieldToDrop))
-        arcpy.AddMessage("Drop fields...")
+        arcpy.AddMessage("Dropping fields...")
         arcpy.env.workspace = fds
         listFCsinFDS = arcpy.ListFeatureClasses()
         arcpy.AddMessage(str(listFCsinFDS))
@@ -78,6 +88,91 @@ class dropFields(object):
                     arcpy.DeleteField_management(fcpath, field.name)
                 else:
                     arcpy.AddMessage("      Did not need to drop: " + field.name)
+        arcpy.env.overwriteOutput = False
+        return
+
+class dropFieldsFromSpecific(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "DropFieldsFromSpecific"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+        param0 = arcpy.Parameter(
+            displayName="Coma Delimited List of FCs to Drop Fields From:",
+            name="listFCsToDropFldsFrom",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Coma and ""|"" Delimited List of Fields to Drop:",
+            name="listFieldsToDrop",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
+            displayName="Geodatabase:",
+            name="gdb",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        params = [param0, param1, param2]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        #Inputs
+        arcpy.env.overwriteOutput = True
+
+        arcpy.AddMessage("Dropping specific fields...")
+
+        listFCsToDropFldsFrom = map(unicode.strip, parameters[0].valueAsText.split(","))
+        listFieldToDrop = parsenestedlists(parameters[1].valueAsText)
+        gdb = parameters[2].valueAsText
+
+        arcpy.env.workspace = gdb
+        listFDSInGDB = arcpy.ListDatasets()
+        #arcpy.AddMessage(listFDSInGDB)
+        count=0
+        for fds in listFDSInGDB:
+            arcpy.AddMessage("   Looking Through Feature Dataset: " + fds)
+            listFCsinFinalFDS3 = arcpy.ListFeatureClasses(feature_dataset=fds)
+            #TODO look for topology in the fds, which might interfer with the renaming of the fields
+            for fc in listFCsinFinalFDS3:
+                if fc in listFCsToDropFldsFrom:
+                    fcFullPath = gdb + "\\" + fds + "\\" + fc
+                    # Note if you use different disable tracking field the following will have to be changes
+                    arcpy.DisableEditorTracking_management(fcFullPath, "DISABLE_CREATOR", "DISABLE_CREATION_DATE",
+                                                           "DISABLE_LAST_EDITOR", "DISABLE_LAST_EDIT_DATE")
+                    listfields = arcpy.ListFields(fcFullPath, listFieldToDrop[count])
+                    if len(listfields) > 0:
+                        arcpy.AddMessage("   >Removing fields from: " + fc)
+                        for field in listFieldToDrop[count]:
+                            arcpy.AddMessage("     >Removing field: " + str(field.name))
+                        arcpy.DeleteField_management(fcFullPath, listFieldToDrop[count])
+                    count=count+1
+                else:
+                    arcpy.AddMessage("    Ignoring: " + fc)
         arcpy.env.overwriteOutput = False
         return
 
@@ -483,8 +578,11 @@ class buildDMUFramework(object):
                 ForTable_GeoMaterial.append(master_GeoMaterial[index])
                 ForTable_GeoMaterialConfidence.append(master_GeoMConfidence[index])
             else:
-                arcpy.AddMessage("  >Term: " + mapunit + " is NOT in the master. Update!!!")
-                ForTable_MissingMapUnit.append(mapunit)
+                if mapunit is not None:
+                    arcpy.AddMessage("  >Term: " + mapunit + " is NOT in the master. Update!!!")
+                    ForTable_MissingMapUnit.append(mapunit)
+                else:
+                    arcpy.AddMessage("Null mapunit!")
 
         # arcpy.AddMessage(ForTable_Description)
         # arcpy.AddMessage(ForTable_AreaFillRGB)
@@ -610,15 +708,16 @@ class buildDataSources(object):
             arcpy.AddMessage(listTablesinGDB)
             for table in listTablesinGDB:
                 tablepath = gdb + "\\" +  table
-                arcpy.AddMessage("    Looking Through Feature Class: " + table)
+                arcpy.AddMessage("    Looking Through Table: " + table)
                 fields = arcpy.ListFields(tablepath)
                 for field in fields:
                     arcpy.AddMessage("     Considering field: " + field.name)
                     if field.name in dataSourceFieldNames:
-                        arcpy.AddMessage("      >" + str(table) + " has field: " + field.name)
+                        arcpy.AddMessage("    >" + str(table) + " has field: " + field.name)
                         arcpy.Frequency_analysis(table, "in_memory/freq", field.name)
                         with arcpy.da.SearchCursor("in_memory/freq", field.name) as cursor:
                             for row in cursor:
+                                arcpy.AddMessage("        Field: " + str(row[0]))
                                 DataSourcesInMap.add(row[0])
         else:
             listFDSinGDB = arcpy.ListDatasets()
@@ -632,7 +731,7 @@ class buildDataSources(object):
                     for field in fields:
                         arcpy.AddMessage("     Considering field: " + field.name)
                         if field.name in dataSourceFieldNames:
-                            arcpy.AddMessage("      >" + str(fc) + " has field: " + field.name)
+                            arcpy.AddMessage("    >" + str(fc) + " has field: " + field.name)
                             arcpy.Frequency_analysis(fc, "in_memory/freq", field.name)
                             with arcpy.da.SearchCursor("in_memory/freq", field.name) as cursor:
                                 for row in cursor:
@@ -657,11 +756,15 @@ class buildDataSources(object):
                 ForTable_Source.append(master_Reference[index])
                 ForTable_URL.append(master_URL[index])
                 ForTable_DataSources.append(dataSource)
-            elif dataSource <> "FGDC-STD-013-2006":
+            elif dataSource <> "FGDC-STD-013-2006" and not None:
                 arcpy.AddMessage("  >Data source: " + dataSource + " is NOT in the master. Update!!!")
                 ForTable_MissingDataSources.append(dataSource)
-            else:
+            elif dataSource is None or dataSource == "" or dataSource == " ":
+                arcpy.AddMessage("Null datasource")
+            elif dataSource == "FGDC-STD-013-2006":
                 arcpy.AddMessage("   Data source: FGDC-STD-013-2006 being ignored")
+            else:
+                arcpy.AddMessage("## Warning unexpected condition meet ##")
 
         # Update the table
         # Assumes/requires GEMS field names
@@ -815,7 +918,7 @@ class buildGlossary(object):
                     arcpy.AddMessage("  >Term: " + terminmap + " is NOT in the master. Update!!!")
                     ForTable_MissingTerms.append(terminmap)
             else:
-                arcpy.AddMessage("WARNING blank value")
+                arcpy.AddMessage("WARNING blank glossary value")
         # Update the table
         # Assumes/requires GEMS field names
         coreFields=['Term', 'Definition', 'DefinitionSourceID']
@@ -911,4 +1014,111 @@ class geomorphUnitConverter(object):
                 cursor.updateRow(row)
                 count = count + 1
         arcpy.env.overwriteOutput = False
+        return
+
+class populateLabelFromFeatureLinks(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "PopulateLabelFromFeatureLinks"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="Geodatabase:",
+            name="gdb",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Feature Dataset in the GDB:",
+            name="fds",
+            datatype="DEFeatureDataset",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
+            displayName="Coma Delimited List of Feature-linked Annotation Feature Classes:",
+            name="annos",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        param3 = arcpy.Parameter(
+            displayName="Coma Delimited List of Feature Classes linked to the Annotations:",
+            name="fcs",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        param4 = arcpy.Parameter(
+            displayName="Null the label field first",
+            name="nullFirst",
+            datatype="Boolean",
+            parameterType="Optional",
+            direction="Input")
+
+
+        params = [param0, param1, param2, param3, param4]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        # Inputs
+
+        #TODO get gdb that the fds is in from path
+        gdb = parameters[0].valueAsText
+        fds = parameters[1].valueAsText
+        listFCs = map(unicode.strip, parameters[2].valueAsText.split(","))
+        listAnnos = map(unicode.strip, parameters[3].valueAsText.split(","))
+        nullFirst = parameters[4].valueAsText
+        print("Null first: "+ nullFirst)
+
+        arcpy.env.overwriteOutput = True
+        print("Populating the Label field from the feature-linked annotations...")
+        arcpy.env.workspace = gdb
+        edit = arcpy.da.Editor(arcpy.env.workspace)
+        edit.startEditing(False, True)
+        edit.startOperation()
+        #Note assumes lowercase field names
+        for i, anno in enumerate(listAnnos):
+            annoPath = fds + "\\" + anno
+            with arcpy.da.SearchCursor(annoPath,
+                                       ["featureid", "textstring"]) as cursor:  # Note lowercase names from postgres
+                listFeatureIds = []
+                listLabels = []
+                for row in cursor:
+                    listFeatureIds.append(row[0])
+                    listLabels.append(row[1])
+            fcPath = fds + "\\" + listFCs[i]
+            if nullFirst:
+                arcpy.CalculateField_management(fcPath, "label", "NULL")
+            with arcpy.da.UpdateCursor(fcPath, ["objectid", "label"]) as editcursor:
+                for editrow in editcursor:
+                    if editrow[0] in listFeatureIds:
+                        index = listFeatureIds.index(editrow[0])
+                        editrow[1] = listLabels[index]
+                        editcursor.updateRow(editrow)
+        edit.stopOperation()
+        edit.stopEditing(True)
+        arcpy.env.overwriteOutput = False
+
         return
