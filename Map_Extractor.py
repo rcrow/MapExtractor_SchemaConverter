@@ -108,10 +108,10 @@ def parseList(df,col):
 arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
-parametersExcelFilePath = r"extractorParametersCR.xlsx"
+parametersExcelFilePath = r"extractorParametersCARR.xlsx"
 #######################################################################################################################
 #Import Options From Excel Sheet
-toolParameters= pandas.read_excel(parametersExcelFilePath, sheetname='ToolPaths',skiprows=1)
+toolParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ToolPaths',skiprows=1)
 #print(toolParameters)
 print("--------------------------------------------")
 print("Toolboxes being used: ")
@@ -119,9 +119,13 @@ pathToGeMSToolB=parseValue(toolParameters,'pathToGeMSToolB')
 arcpy.ImportToolbox(pathToGeMSToolB)
 pathToSchemaConvertToolB = parseValue(toolParameters,'pathToSchemaConvertToolB')
 arcpy.ImportToolbox(pathToSchemaConvertToolB)
+pathToTableBuilderToolB = parseValue(toolParameters,'pathToTableBuilderToolB')
+arcpy.ImportToolbox(pathToTableBuilderToolB)
+#TODO remove hardcoding just for testing
+#arcpy.ImportToolbox(r"\\Igswzcwwgsrio\loco\Team\Crow\_Python\MapExtractor\DMUTool.pyt")
 #######################################################################################################################
 #Import Export Details From Excel Sheet
-inParameters= pandas.read_excel(parametersExcelFilePath, sheetname='MainInputs',skiprows=1)
+inParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='MainInputs',skiprows=1)
 #print(inParameters)
 print("--------------------------------------------")
 print("Input parameters being used: ")
@@ -147,7 +151,7 @@ inquad = parseValue(inParameters,'inquad') #Will look for polygons with 'yes' in
 
 #######################################################################################################################
 #Import Export Details From Excel Sheet
-exParameters= pandas.read_excel(parametersExcelFilePath, sheetname='ExportDestinations',skiprows=1)
+exParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ExportDestinations',skiprows=1)
 print("--------------------------------------------")
 print("Export parameters being used: ")
 exportFolder = parseValue(exParameters,'exportFolder')
@@ -156,7 +160,7 @@ exportFDSPrefix = parseValue(exParameters,'exportFDSPrefix') #If this is not bla
 
 #######################################################################################################################
 #Import Options From Excel Sheet
-opParameters= pandas.read_excel(parametersExcelFilePath , sheetname='InputsOptional',skiprows=1)
+opParameters= pandas.read_excel(parametersExcelFilePath , sheet_name='InputsOptional',skiprows=1)
 print("--------------------------------------------")
 print("Optional parameters being used: ")
 buildPolygons = parseValue(opParameters,'buildPolygons')
@@ -262,7 +266,6 @@ if buildDataSources:
 
 buildDMU = parseValue(opParameters,'buildDMU')
 if buildDMU:
-
     mapUnitTable= parseValue(opParameters,'mapUnitTable')
     exampleBlankDMUTable= parseValue(opParameters,'exampleBlankDMUTable')
     nullDescription= parseValue(opParameters,'nullDescription')
@@ -433,38 +436,39 @@ if addExtraFCs:
     for extraFC in listExtraFCs:
         arcpy.Copy_management(inputExtraFCsPathFDS + "\\" + extraFC, exportFDSFullPathNew + "\\" + extraFC)
 
-
+usePopulateLabelTool = False
 if populateLabelFromFeatureLinks:
-    #TODO get this working through the toolbox
-    # arcpy.populateLabelFromFeatureLinks_SchemaConvert(
-    #     gdb=exportGDBName,
-    #     fds=exportFDSFullPathNew,
-    #     annos=strlistAnnos, fcs=strlistFCsToSelectByLocation, nullFirst='true')
-
-    print("Populating the Label field from the feature-linked annotations...")
-    arcpy.env.workspace = exportGDBFullPath
-    edit = arcpy.da.Editor(arcpy.env.workspace)
-    edit.startEditing(False, True)
-    edit.startOperation()
-    for i, anno in enumerate(listAnnos):
-        annoPath = exportFDSFullPathNew + "\\" + anno
-        with arcpy.da.SearchCursor(annoPath,
-                                   ["featureid", "textstring"]) as cursor:  # Note lowercase names from postgres
-            listFeatureIds = []
-            listLabels = []
-            for row in cursor:
-                listFeatureIds.append(row[0])
-                listLabels.append(row[1])
-        fcPath = exportFDSFullPathNew + "\\" + listFCsToSelectByLocation[i]
-        arcpy.CalculateField_management(fcPath, "label", "NULL")
-        with arcpy.da.UpdateCursor(fcPath, ["objectid", "label"]) as editcursor:
-            for editrow in editcursor:
-                if editrow[0] in listFeatureIds:
-                    index = listFeatureIds.index(editrow[0])
-                    editrow[1] = listLabels[index]
-                    editcursor.updateRow(editrow)
-    edit.stopOperation()
-    edit.stopEditing(True)
+    if usePopulateLabelTool:
+        #TODO get this working through the toolbox
+        arcpy.populateLabelFromFeatureLinks_SchemaConvert(
+            gdb=exportGDBName,
+            fds=exportFDSFullPathNew,
+            annos=strlistAnnos, fcs=strlistFCsToSelectByLocation, nullFirst='true')
+    else:
+        print("Populating the Label field from the feature-linked annotations...")
+        arcpy.env.workspace = exportGDBFullPath
+        edit = arcpy.da.Editor(arcpy.env.workspace)
+        edit.startEditing(False, True)
+        edit.startOperation()
+        for i, anno in enumerate(listAnnos):
+            annoPath = exportFDSFullPathNew + "\\" + anno
+            with arcpy.da.SearchCursor(annoPath,
+                                       ["featureid", "textstring"]) as cursor:  # Note lowercase names from postgres
+                listFeatureIds = []
+                listLabels = []
+                for row in cursor:
+                    listFeatureIds.append(row[0])
+                    listLabels.append(row[1])
+            fcPath = exportFDSFullPathNew + "\\" + listFCsToSelectByLocation[i]
+            arcpy.CalculateField_management(fcPath, "label", "NULL")
+            with arcpy.da.UpdateCursor(fcPath, ["objectid", "label"]) as editcursor:
+                for editrow in editcursor:
+                    if editrow[0] in listFeatureIds:
+                        index = listFeatureIds.index(editrow[0])
+                        editrow[1] = listLabels[index]
+                        editcursor.updateRow(editrow)
+        edit.stopOperation()
+        edit.stopEditing(True)
 
 if calcIDNumbers:
     print("Adding ID fields...")
@@ -543,21 +547,23 @@ if makeTables:
                                      fullPathTable,
                                      field)
 
+useDropTool=False
 if dropFields:
-    # arcpy.dropFieldsFromSpecific_SchemaConvert(listFCsToDropFldsFrom=strlistFCsToDropFldsFrom,
-    #                                            listFieldsToDrop=strlistFieldToDrop,
-    #                                            gdb=exportGDBFullPath)
-
-    for x, fctodrop in enumerate(listFCsToDropFldsFrom):
-        #print(fctodrop)
-        fcFullPath = exportFDSFullPathNew + "\\" + fctodrop
-        # Note if you use different disable tracking field the following will have to be changes
-        arcpy.DisableEditorTracking_management(fcFullPath, "DISABLE_CREATOR", "DISABLE_CREATION_DATE",
-                                               "DISABLE_LAST_EDITOR", "DISABLE_LAST_EDIT_DATE")
-        listfields=arcpy.ListFields(fcFullPath, listFieldToDrop[x])
-        if len(listfields) > 0:
-            print("  Removing fields from: " + fctodrop )
-            arcpy.DeleteField_management(fcFullPath, listFieldToDrop[x])
+    if useDropTool:
+        arcpy.dropFieldsFromSpecific_SchemaConvert(listFCsToDropFldsFrom=strlistFCsToDropFldsFrom,
+                                                   listFieldsToDrop=strlistFieldToDrop,
+                                                   gdb=exportGDBFullPath)
+    else:
+        for x, fctodrop in enumerate(listFCsToDropFldsFrom):
+            #print(fctodrop)
+            fcFullPath = exportFDSFullPathNew + "\\" + fctodrop
+            # Note if you use different disable tracking field the following will have to be changes
+            arcpy.DisableEditorTracking_management(fcFullPath, "DISABLE_CREATOR", "DISABLE_CREATION_DATE",
+                                                   "DISABLE_LAST_EDITOR", "DISABLE_LAST_EDIT_DATE")
+            listfields=arcpy.ListFields(fcFullPath, listFieldToDrop[x])
+            if len(listfields) > 0:
+                print("  Removing fields from: " + fctodrop )
+                arcpy.DeleteField_management(fcFullPath, listFieldToDrop[x])
 
 if nullFields:
     print("Nulling out fields...")
@@ -729,7 +735,7 @@ if crossWalkPolyAndPoints:
                 edit.stopEditing(True)
 
 if buildGlossary:
-    arcpy.buildGlossary_SchemaConvert(
+    arcpy.buildGlossary_TableBuilder(
         glossaryTable=glossaryTable,
         gdb=exportGDBFullPath,
         exampleBlankGlossaryTable=exampleBlankGlossaryTable,
@@ -768,45 +774,185 @@ if buildDataSources:
 
     if getDataSourceFromExcel and getDataSourceFromFCs:
         writer = pandas.ExcelWriter(mergedTableAll)
-        header = pandas.DataFrame(["FOLDERNAME","AUTHORS","SOURCEURL","REFERENCE"]).T
-        header.to_excel(writer,'Sheet1',header=False,index=False)
+        headerDS = pandas.DataFrame(["FOLDERNAME","AUTHORS","SOURCEURL","REFERENCE"]).T
+        headerDS.to_excel(writer,'Sheet1',header=False,index=False)
         pandas.DataFrame([master_DataSourceID]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1,startcol=0)
         pandas.DataFrame([master_Authors]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1,startcol=1)
         pandas.DataFrame([master_URL]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1, startcol=2)
         pandas.DataFrame([master_Reference]).T.to_excel(writer, 'Sheet1', header=False, index=False,startrow=1,startcol=3)
         writer.save()
 
-    arcpy.buildDataSources_SchemaConvert(
+    arcpy.buildDataSources_TableBuilder(
         masterDataSourcesTable=mergedTableAll,
         gdb=exportGDBFullPath,
         exampleBlankDataSourceTable=exampleBlankDataSourceTable,
         onlyTables="")
 
+useStandAloneTool = False
 if buildDMU:
-    if nullDescription:
-        nullDescription = 'true'
+    if useStandAloneTool:
+        if nullDescription:
+            nullDescription = 'true'
+        else:
+            nullDescription = ''
+        arcpy.AddMessage("Null description: " + nullDescription)
+
+        if nullFillPattern:
+            nullFillPattern = 'true'
+        else:
+            nullFillPattern = ''
+        arcpy.AddMessage("Null fill pattern: " + nullFillPattern)
+
+        if calcIDNumbers:
+            calcIDNumbers = 'true'
+        else:
+            calcIDNumbers = ''
+        arcpy.AddMessage("calcIDNumbers: " + calcIDNumbers)
+
+        arcpy.AddMessage("Loading DMU tool")
+        arcpy.AddMessage("Using the SchemaConvert version")
+        arcpy.buildDMUFramework_TableBuilder(MasterMapUnitTable=mapUnitTable,
+                                              gdb=exportGDBFullPath,
+                                              exampleBlankDMUTable=exampleBlankDMUTable,
+                                              NullDescription=nullDescription,
+                                              NullPattern=nullFillPattern,
+                                              calcIDs=calcIDNumbers,
+                                              descSourceID=descriptionSourceID)
+
     else:
-        nullDescription = ''
-    if nullFillPattern:
-        nullFillPattern = 'true'
-    else:
-        nullFillPattern = ''
-    if calcIDNumbers:
-        calcIDNumbers = 'true'
-    else:
-        calcIDNumbers = ''
-    arcpy.buildDMUFramework_SchemaConvert(MasterMapUnitTable=mapUnitTable,
-                                          gdb=exportGDBFullPath,
-                                          exampleBlankDMUTable=exampleBlankDMUTable,
-                                          NullDescription=nullDescription,
-                                          NullPattern=nullFillPattern,
-                                          calcIDs=calcIDNumbers,
-                                          descSourceID=descriptionSourceID)
+        arcpy.env.overwriteOutput = True
+        arcpy.AddMessage("Building DMU table with out the tool...")
+        dfG = pandas.read_excel(mapUnitTable)
+        headerDMU = list(dfG.columns.values)
+
+        master_MapUnit = dfG['MapUnit'].values.tolist()
+        master_UnitName = dfG['Name'].values.tolist()
+        master_Age = dfG['Age'].values.tolist()
+        master_Description = dfG['Description'].values.tolist()
+        master_FullName = dfG['FullName'].values.tolist()
+        master_Order = dfG['DMUOrder'].values.tolist()
+        master_ParagraphStyle = dfG['ParagraphStyle'].values.tolist()
+        master_Label = dfG['Label'].values.tolist()
+        master_Symbol = dfG['Symbol'].values.tolist()
+        master_AreaFillRGB = dfG['AreaFillRGB'].values.tolist()
+        master_AreaFillPatternDescription = dfG['AreaFillPatternDescription'].values.tolist()
+        master_GeoMaterial = dfG['GeoMaterial'].values.tolist()
+        master_GeoMConfidence = dfG['GeoMaterialConfidence'].values.tolist()
+
+        arcpy.env.workspace = exportGDBFullPath
+        listFDSinGDB = arcpy.ListDatasets()
+        MapUnitsInMap = set([])
+
+        for fds in listFDSinGDB:
+            listFCsinFDS = arcpy.ListFeatureClasses(feature_dataset=fds)
+            arcpy.AddMessage("   Looking Through Feature Dataset: " + fds)
+            for fc in listFCsinFDS:
+                arcpy.AddMessage("      Looking Through Feature Class: " + fc)
+                Terms = ["MapUnit"]  # Expand this to look for other needed Glossary Terms if Needed
+                # Currently focused on finding "Type" in ContactsAndFaults
+                for term in Terms:
+                    if len(arcpy.ListFields(fc, term)) > 0:
+                        arcpy.AddMessage("        " + str(fc) + " has field: " + term)
+                        arcpy.Frequency_analysis(fc, "in_memory/freq", term)
+                        with arcpy.da.SearchCursor("in_memory/freq", term) as cursor:
+                            for row in cursor:
+                                MapUnitsInMap.add(row[0])
+
+        # arcpy.AddMessage(str(MapUnitsInMap))
+        # Make a copy of the reference table
+
+        DMUTablePath = exportGDBFullPath + "\\" + "DescriptionOfMapUnits"
+        arcpy.Copy_management(exampleBlankDMUTable, DMUTablePath)
+        # arcpy.DeleteRows_management(gdb + "\\" + "Glossary")  # Empty the table
+        # Create some blank lists for filling
+        ForTable_MapUnit = []
+        ForTable_UnitName = []
+        ForTable_Age = []
+        ForTable_Description = []
+        ForTable_FullName = []
+        ForTable_Order = []
+        ForTable_MissingMapUnit = []
+        ForTable_ParagraphStyle = []
+        ForTable_Label = []
+        ForTable_Symbol = []
+        ForTable_AreaFillRGB = []
+        ForTable_AreaFillPatternDescription = []
+        ForTable_GeoMaterial = []
+        ForTable_GeoMaterialConfidence = []
+
+        for mapunit in MapUnitsInMap:
+            if mapunit in master_MapUnit:
+                arcpy.AddMessage("   Term: " + mapunit + " is in master!")
+                index = master_MapUnit.index(mapunit)
+                ForTable_Age.append(master_Age[index])
+                ForTable_Description.append(master_Description[index])
+                ForTable_UnitName.append(master_UnitName[index])
+                ForTable_MapUnit.append(mapunit)
+                ForTable_FullName.append(master_FullName[index])
+                ForTable_Order.append(master_Order[index])
+                ForTable_ParagraphStyle.append(master_ParagraphStyle[index])
+                ForTable_Label.append(master_Label[index])
+                ForTable_Symbol.append(master_Symbol[index])
+                ForTable_AreaFillRGB.append(master_AreaFillRGB[index])
+                ForTable_AreaFillPatternDescription.append(master_AreaFillPatternDescription[index])
+                ForTable_GeoMaterial.append(master_GeoMaterial[index])
+                ForTable_GeoMaterialConfidence.append(master_GeoMConfidence[index])
+            else:
+                if mapunit is not None:
+                    arcpy.AddMessage("  >Term: " + mapunit + " is NOT in the master. Update!!!")
+                    ForTable_MissingMapUnit.append(mapunit)
+                else:
+                    arcpy.AddMessage("Null mapunit!")
+
+        # arcpy.AddMessage(ForTable_Description)
+        # arcpy.AddMessage(ForTable_AreaFillRGB)
+        # arcpy.AddMessage(ForTable_AreaFillPatternDescription)
+        # Update the table
+        # Assumes/requires GEMS field names
+        # arcpy.AddField_management(gdb + "\\" + "DescriptionOfMapUnits","TempOrder","Integer")
+        cursor = arcpy.da.InsertCursor(DMUTablePath,
+                                       ['MapUnit', 'Name', 'Age', 'Description', 'FullName', 'HierarchyKey',
+                                        'ParagraphStyle', 'Label',
+                                        'Symbol', 'AreaFillRGB', 'AreaFillPatternDescription', 'GeoMaterial',
+                                        'GeoMaterialConfidence'])
+        for i, item in enumerate(ForTable_MapUnit):
+            cursor.insertRow([ForTable_MapUnit[i], ForTable_UnitName[i], ForTable_Age[i], ForTable_Description[i],
+                              ForTable_FullName[i], ForTable_Order[i], ForTable_ParagraphStyle[i], ForTable_Label[i],
+                              ForTable_Symbol[i], ForTable_AreaFillRGB[i], ForTable_AreaFillPatternDescription[i],
+                              ForTable_GeoMaterial[i], ForTable_GeoMaterialConfidence[i]
+                              ])
+        del cursor
+
+        if len(ForTable_MissingMapUnit) > 0:
+            # Add the missing datasourceIDs
+            cursor2 = arcpy.da.InsertCursor(DMUTablePath, ['MapUnit'])
+            for x, item2 in enumerate(ForTable_MissingMapUnit):
+                cursor2.insertRow([ForTable_MissingMapUnit[x]])
+            del cursor2
+
+        if nullDescription:
+            arcpy.AddMessage("Nulling the Description field...")
+            arcpy.CalculateField_management(DMUTablePath, 'Description', "NULL")
+
+        if nullFillPattern:
+            arcpy.AddMessage("Nulling the AreaFillPatternDescription field...")
+            arcpy.CalculateField_management(DMUTablePath, 'AreaFillPatternDescription', "NULL")
+
+        if calculateIDs:
+            arcpy.AddMessage("Calculating DescriptionOfMapUnits IDs...")
+            arcpy.CalculateField_management(DMUTablePath, 'DescriptionOfMapUnits_ID', "\"DMU\"&[OBJECTID]")
+
+        if isinstance(descriptionSourceID, unicode):
+            arcpy.AddMessage("Assigning Source IDs...")
+            arcpy.CalculateField_management(DMUTablePath, 'DescriptionSourceID', "\"" + descriptionSourceID + "\"")
+
+        arcpy.env.overwriteOutput = False
+
 
 if buildGlossary:
     #Go through the newly created tables now
     print("Building Glossary table from tables...")
-    arcpy.buildGlossary_SchemaConvert(
+    arcpy.buildGlossary_TableBuilder(
         glossaryTable=glossaryTable,
         gdb=exportGDBFullPath,
         exampleBlankGlossaryTable="",
@@ -816,7 +962,7 @@ if buildDataSources:
     #No Glossary term in DataSources table so run this last
     #Go through the newly created tables now
     print("Building DataSources table from tables...")
-    arcpy.buildDataSources_SchemaConvert(
+    arcpy.buildDataSources_TableBuilder(
         masterDataSourcesTable=mergedTableAll,
         gdb=exportGDBFullPath,
         exampleBlankDataSourceTable="",
