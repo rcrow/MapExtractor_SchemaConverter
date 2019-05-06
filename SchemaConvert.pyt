@@ -395,7 +395,6 @@ class switchSymbolAndType(object):
                         arcpy.CalculateField_management(fc, "Type", "\"\"")
         return
 
-
 class geomorphUnitConverter(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
@@ -588,15 +587,15 @@ class populateLabelFromFeatureLinks(object):
             direction="Input")
 
         param2 = arcpy.Parameter(
-            displayName="Coma Delimited List of Feature-linked Annotation Feature Classes:",
-            name="annos",
+            displayName="Coma Delimited List of Feature Classes linked to the Annotations:",
+            name="fcs",
             datatype="GPString",
             parameterType="Required",
             direction="Input")
 
         param3 = arcpy.Parameter(
-            displayName="Coma Delimited List of Feature Classes linked to the Annotations:",
-            name="fcs",
+            displayName="Coma Delimited List of Feature-linked Annotation Feature Classes:",
+            name="annos",
             datatype="GPString",
             parameterType="Required",
             direction="Input")
@@ -640,16 +639,26 @@ class populateLabelFromFeatureLinks(object):
         print("Null first: "+ nullFirst)
 
         arcpy.env.overwriteOutput = True
-        print("Populating the Label field from the feature-linked annotations...")
+        arcpy.AddMessage("Populating the Label field from the feature-linked annotations...")
         arcpy.env.workspace = gdb
         edit = arcpy.da.Editor(arcpy.env.workspace)
         edit.startEditing(False, True)
         edit.startOperation()
-        #Note assumes lowercase field names
         for i, anno in enumerate(listAnnos):
             annoPath = fds + "\\" + anno
+            arcpy.AddMessage(annoPath)
+            #Code to handle uppercase and lowercase field names
+            #TODO this block needs testing
+            fields = arcpy.ListFields(annoPath)
+            fieldNames = [x.name for x in fields]
+            if "FEATUREID" in fieldNames or "FeatureID" in fieldNames:
+                Annofields = ["FEATUREID", "TextString"]
+                FCfields = ["OBJECTID", "Label"]
+            elif "featureid" in fieldNames:
+                Annofields = ["featureid", "textstring"]
+                FCfields = ["objectid", "label"]
             with arcpy.da.SearchCursor(annoPath,
-                                       ["featureid", "textstring"]) as cursor:  # Note lowercase names from postgres
+                                       Annofields) as cursor:
                 listFeatureIds = []
                 listLabels = []
                 for row in cursor:
@@ -658,7 +667,7 @@ class populateLabelFromFeatureLinks(object):
             fcPath = fds + "\\" + listFCs[i]
             if nullFirst:
                 arcpy.CalculateField_management(fcPath, "label", "NULL")
-            with arcpy.da.UpdateCursor(fcPath, ["objectid", "label"]) as editcursor:
+            with arcpy.da.UpdateCursor(fcPath, FCfields) as editcursor:
                 for editrow in editcursor:
                     if editrow[0] in listFeatureIds:
                         index = listFeatureIds.index(editrow[0])
