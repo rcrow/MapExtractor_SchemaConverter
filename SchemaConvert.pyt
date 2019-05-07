@@ -1,4 +1,5 @@
 import arcpy
+import datetime
 
 def parsenestedlists(str):
     templist = map(unicode.strip, str.split(","))
@@ -9,6 +10,35 @@ def parsenestedlists(str):
     arcpy.AddMessage(list)
     return list
 
+
+def datetimePrint():
+    time = datetime.datetime.now()  # Get system time
+    if len(str(time.month)) == 1:
+        month = "0" + str(time.month)
+    else:
+        month = str(time.month)
+    if len(str(time.day)) == 1:
+        day = "0" + str(time.day)
+    else:
+        day = str(time.day)
+    if len(str(time.hour)) == 1:
+        hour = "0" + str(time.hour)
+    else:
+        hour = str(time.hour)
+    if len(str(time.minute)) == 1:
+        minute = "0" + str(time.minute)
+    else:
+        minute = str(time.minute)
+    if len(str(time.second)) == 1:
+        second = "0" + str(time.second)
+    else:
+        second = str(time.second)
+    timeDateString = str(time.year) + month + day + "_" + hour + minute + "_" + second
+    date = month + "/" + day + "/" + str(time.year)
+    timestr = hour + ":" + minute
+    return [timeDateString, date, timestr, time]
+
+
 class Toolbox (object):
     def __init__(self):
         """Define the toolbox (the name of the toolbox is the name of the
@@ -18,7 +48,7 @@ class Toolbox (object):
 
         # List of tool classes associated with this toolbox
         self.tools = [dropFields, dropFieldsFromSpecific, renameFields, nullFields, geomorphUnitConverter,
-                      switchSymbolAndType, populateLabelFromFeatureLinks, populateMapUnitConfidence]
+                      switchSymbolAndType, populateLabelFromFeatureLinks, populateMapUnitConfidence,simplifyHierarcyKeys]
 
 class dropFields(object):
     def __init__(self):
@@ -678,3 +708,97 @@ class populateLabelFromFeatureLinks(object):
         arcpy.env.overwriteOutput = False
 
         return
+
+class simplifyHierarcyKeys(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "SimplifyHierarcyKeys"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="DMU Table:",
+            name="table",
+            datatype="DETable",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Output Geodatabase:",
+            name="gdb",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        params = [param0, param1]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        # Inputs
+
+        timeDateString = datetimePrint()[0]  # Gets time and date to add to export
+
+        table = parameters[0].valueAsText
+        gdb = parameters[1].valueAsText
+
+        outputFullPath = gdb+"\\DMU_sorted_temp"
+
+        # arcpy.Copy_management(DMUinputPath,outputFullPath)
+        arcpy.Sort_management(table, outputFullPath, "HierarchyKey")
+
+        previousOrigCode = ["000", "000", "000", "000", "000"]
+        previousNewCode = ["000", "000", "000", "000", "000"]
+        with arcpy.da.UpdateCursor(outputFullPath, ["HierarchyKey"]) as cursor:
+            for row in cursor:
+                currentCode = row[0].split("-")
+                print("----------")
+                print(" Previous orig Code: " + '-'.join(previousOrigCode))
+                print(" Previous new Code: " + '-'.join(previousNewCode))
+                print(" Current Code:  " + '-'.join(currentCode))
+                newCode = ["000", "000", "000", "000", "000"]
+                for position, item in enumerate(currentCode):
+                    print("   Position: " + str(position))
+                    print(item)
+                    print(previousOrigCode[position])
+                    if str(item) == str(previousOrigCode[position]):
+                        print("    SAME")
+                        newCode[position] = previousNewCode[position]
+                        print(newCode[position])
+                    elif item > previousOrigCode[position]:
+                        print("    HIT")
+                        newCode[position] = str(int(previousNewCode[position]) + 1).zfill(3)
+                        for x in range(position + 1, 5):
+                            print("     Zeroing out position: " + str(x))
+                            newCode[x] = "000"
+                    else:
+                        print("    PROBLEM")
+                print(" New Code:  " + '-'.join(newCode))
+                previousOrigCode = currentCode
+                previousNewCode = newCode
+                row[0] = ('-'.join(newCode))
+                cursor.updateRow(row)
+        arcpy.env.overwriteOutput = True
+        arcpy.Copy_management(outputFullPath, gdb+"\\DescriptionOfMapUnits_Sorted")
+        arcpy.Delete_management(table)
+        arcpy.Delete_management(outputFullPath)
+        arcpy.Rename_management(gdb+"\\DescriptionOfMapUnits_Sorted",table)
+        arcpy.env.overwriteOutput = True
