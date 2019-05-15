@@ -474,34 +474,91 @@ class geomorphUnitConverter(object):
         fc = parameters[0].valueAsText
         independent = parameters[1].valueAsText
         arcpy.env.overwriteOutput = True
-        fieldsToAdd = ["mapunit","underunit","interlacedunit","compositeunit"]
+        fieldsToAdd = ["mapunit","underunit","interlacedunit","compositeunit","bedrockunit","underunderunit","underinterlaced"]
         for field in fieldsToAdd:
             arcpy.AddField_management(in_table=fc,field_name=field,field_type="TEXT",field_length=50)
 
         fields= [independent]+fieldsToAdd
 
-        with arcpy.da.UpdateCursor(fc, fields) as cursor:
+        with arcpy.da.UpdateCursor(fc,fields) as cursor:
             count = 1
             for row in cursor:
+                print(row[0])
                 slashes = row[0].count("/")
+                slashesIndex = row[0].find("/")
+                print(slashesIndex)
                 pluses = row[0].count("+")
-                arcpy.AddMessage("Feature #" + str(count) + " has " + str(slashes) + " Slashes and " + str(pluses) + " Pluses")
-                if (slashes > 0 and pluses == 0):
+                plusesIndex = row[0].find("+")
+                print(plusesIndex)
+                minuses = row[0].count("-")
+                minusesIndex = row[0].find("-")
+                print(minusesIndex)
+
+                print("Feature #" + str(count) + " has " + str(slashes) + " Slashes and " + str(
+                    pluses) + " Pluses and " + str(minuses) + " Minuses")
+                # Case 2 only one stacked (e.g. Qyag/Qiag)
+                if (slashes == 1 and pluses == 0 and minuses == 0):
+                    print(" One Slash")
                     parts = row[0].split("/")
                     row[1] = parts[0]
                     row[2] = parts[1]
                     row[4] = row[0]
-                elif (pluses > 0 and slashes == 0):
+                # Case 1 only one interlacing (e.g. Qaa+Qyay)
+                elif (pluses == 1 and slashes == 0 and minuses == 0):
+                    print(" One Plus")
                     parts = row[0].split("+")
                     row[1] = parts[0]
                     row[3] = parts[1]
                     row[4] = row[0]
-                elif (pluses == 0 and slashes == 0):
+                # Case 3 only one pediment (e.g. Qpd-fpg)
+                elif (minuses == 1 and pluses == 0 and slashes == 0):
+                    print(" One Minus")
+                    parts = row[0].split("-")
+                    row[1] = parts[0]
+                    row[5] = parts[1]
+                    row[4] = row[0]
+                # Case 4 interlaced over one unit
+                elif (pluses == 1 and slashes == 1 and minuses == 0 and plusesIndex < slashesIndex):
+                    print(" Plus before Slash")
+                    parts = row[0].split("+")
+                    secondParts = parts[1].split("/")
+                    row[1] = parts[0]
+                    row[3] = secondParts[0]
+                    row[2] = secondParts[1]
+                    row[4] = row[0]
+                # Case 5 interlaced over pediment
+                elif (pluses == 1 and slashes == 1 and minuses == 1 and plusesIndex < slashesIndex and slashesIndex < minusesIndex):
+                    print(" Plus, Slash, and Minus in that order")
+                    parts = row[0].split("/")
+                    firstParts = parts[0].split("+")
+                    secondParts = parts[1].split("-")
+                    row[1] = firstParts[0]
+                    row[3] = firstParts[1]
+                    row[2] = secondParts[0]
+                    row[5] = secondParts[1]
+                    row[4] = row[0]
+                # Case 6 three stacked
+                elif (pluses == 0 and slashes == 2 and minuses == 0):
+                    print(" 2 slashes")
+                    parts = row[0].split("/")
+                    row[1] = parts[0]
+                    row[2] = parts[1]
+                    row[6] = parts[2]
+                    row[4] = row[0]
+                # Case 7 interlaced under one unit
+                elif (pluses == 1 and slashes == 1 and minuses == 0 and slashesIndex < plusesIndex):
+                    print(" Plus before Slash")
+                    parts = row[0].split("/")
+                    secondParts = parts[1].split("+")
+                    row[1] = parts[0]
+                    row[2] = secondParts[0]
+                    row[7] = secondParts[1]
+                    row[4] = row[0]
+                elif (pluses == 0 and slashes == 0 and minuses == 0):
                     row[1] = row[0]
                     row[4] = row[0]
                 cursor.updateRow(row)
                 count = count + 1
-        arcpy.env.overwriteOutput = False
         return
 
 class populateMapUnitConfidence(object):
