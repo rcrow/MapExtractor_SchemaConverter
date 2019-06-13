@@ -1,6 +1,7 @@
 import arcpy
 import datetime
 import pandas
+import os
 
 #######################################################################################################################
 #Some functions
@@ -38,7 +39,7 @@ def intersectFC(FCPath,quadPath,exportPath):
 
 def checkAndDelete(path):
     if arcpy.Exists(path):
-        print("  " + path +": Exists, Deleted")
+        print("  " + path +": Exists, Deleting")
         arcpy.Delete_management(path)
     else:
         print("  " + path +": Does Not Exist")
@@ -108,11 +109,11 @@ def parseList(df,col):
 arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
-parametersExcelFilePath = r"extractorParametersCARR.xlsx"
+parametersExcelFilePath = r"extractorParametersCR106.xlsx"
 #######################################################################################################################
 #Import Options From Excel Sheet
 toolParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ToolPaths',skiprows=1)
-#print(toolParameters)
+print(toolParameters)
 print("--------------------------------------------")
 print("Toolboxes being used: ")
 pathToGeMSToolB=parseValue(toolParameters,'pathToGeMSToolB')
@@ -305,18 +306,52 @@ print(" Creating a new GDB at: "+exportGDBFullPath)
 arcpy.CreateFileGDB_management(out_folder_path=exportFolder,
                                out_name=exportGDBName,
                                out_version="CURRENT")
-#Create a FDS
-arcpy.CreateFeatureDataset_management(out_dataset_path=exportGDBFullPath,
-                                      out_name=inputCoreFDSName,
-                                      spatial_reference=spatialRef)
 
 exportFDSFullPath = exportGDBFullPath + "\\" + inputCoreFDSName
-print(" Created a new FDS at: "+exportFDSFullPath)
-
 exportFDSFullPathNew = exportGDBFullPath + "\\" + exportFDSPrefix + inputFDSNameWOInitials
 
-print(" Starting to copy everything over...")
-copyOnlyNeeded(inputFDSFullPath,
+#The copyOnlyNeeded stopped working sometime between the release of 10.3.1 and 10.6.1 due to an apparent bug in how
+#FCs with features-linked annotations are copied using Copy_Managment
+copyEverything=True
+
+if copyEverything:
+    print(" Copying everything")
+    print("  Creating a copy at: " + exportFDSFullPathNew)
+    arcpy.Copy_management(in_data=inputFDSFullPath,
+                          out_data=exportFDSFullPathNew)
+    print(" Removing stuff that is not needed")
+    arcpy.env.workspace = exportFDSFullPathNew
+    print("  Workspace is: " + arcpy.env.workspace)
+
+    #Delete all topology because it stop the deletion of participating feature clases below
+    fd_objects = arcpy.ListDatasets(wild_card=None, feature_type='')
+    print(fd_objects)
+    for dataset in fd_objects:  # iterate feature dataset objects
+        desc_dataset = arcpy.Describe(dataset)
+        if desc_dataset.datasetType == 'Topology':  # finding out whether is topology
+            arcpy.Delete_management(exportFDSFullPathNew + "\\" + dataset)
+            print("   Deleting: " + str(dataset))
+
+    listFCSBeforeRemoval = arcpy.ListFeatureClasses("*")
+    print(listCoreFCs)
+    for featureClass in listFCSBeforeRemoval:
+        coreName=NCGMPname(featureClass,inputPrefixLength)[0]
+        if coreName not in listCoreFCs:
+            featureClassPath = exportFDSFullPathNew + "\\" + featureClass
+            arcpy.DeleteFeatures_management(featureClassPath)
+            print("   Deleting: " + str(featureClass))
+        else:
+            print("   Saving: " + str(featureClass))
+else:
+    # Create a FDS
+    arcpy.CreateFeatureDataset_management(out_dataset_path=exportGDBFullPath,
+                                          out_name=inputCoreFDSName,
+                                          spatial_reference=spatialRef)
+
+    print(" Created a new FDS at: " + exportFDSFullPath)
+    print(" Starting to copy the needed files over...")
+
+    copyOnlyNeeded(inputFDSFullPath,
                exportFDSFullPath,
                exportFDSFullPathNew,
                inputPrefixLength,
@@ -364,7 +399,7 @@ for fcInExportDB in listFCsInExportDB:
     print("    Feature class full path: " + fcPath)
     fcName = NCGMPname(fcInExportDB,inputPrefixLength)[0] #Truncates initial at start of name
     print("    Feature class name: " + fcName)
-    if fcName == "ContactsAndFaults":
+    if fcName == "ContactsAndFaults" or fcName == "CSAContactsAndFaults" or fcName == "CSBContactsAndFaults":
         fcExportPath = exportFDSFullPathNew+"\\"+fcName+"_temp" #ContactsAndFaults temp till quad added
     else:
         fcExportPath = exportFDSFullPathNew + "\\" + fcName
@@ -377,6 +412,7 @@ for fcInExportDB in listFCsInExportDB:
             cluster_tolerance="")
         print("  Finished clipping: " + fcName)
         if fcName == "ContactsAndFaults":
+            print("CONTACTSANDFAULTS")
             # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
             quadLine = exportFDSFullPathNew + "\\" + "quadLines"
             # Convert the polys to lines
@@ -397,10 +433,55 @@ for fcInExportDB in listFCsInExportDB:
                                               exportFDSFullPathNew + "\\" + "ContactsAndFaults")
             checkAndDelete(exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2")
             checkAndDelete(fcExportPath)  # Bcz temp name
+        elif fcName == "CSAContactsAndFaults":
+            print("CSA_CONTACTSANDFAULTS")
+            # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
+            quadLine = exportFDSFullPathNew + "\\" + "quadLines"
+            # Convert the polys to lines
+            arcpy.FeatureToLine_management(quad, quadLine)
+            # This will change the type of everything in the FC to 31.08
+            with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
+                for row in cursor:
+                    row[0] = '31.08' #Map neatline
+                    cursor.updateRow(row)
+            arcpy.Merge_management([fcExportPath, quadLine],
+                                   exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2")
+            if removeMultiParts:
+                arcpy.MultipartToSinglepart_management(
+                    in_features=exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2",
+                    out_feature_class=exportFDSFullPathNew + "\\" + "CSAContactsAndFaults")
+            else:
+                arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2",
+                                              exportFDSFullPathNew + "\\" + "CSAContactsAndFaults")
+            checkAndDelete(exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2")
+            checkAndDelete(fcExportPath)  # Bcz temp name
+        elif fcName == "CSBContactsAndFaults":
+            print("CSB_CONTACTSANDFAULTS")
+            # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
+            quadLine = exportFDSFullPathNew + "\\" + "quadLines"
+            # Convert the polys to lines
+            arcpy.FeatureToLine_management(quad, quadLine)
+            # This will change the type of everything in the FC to 31.08
+            with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
+                for row in cursor:
+                    row[0] = '31.08' #Map neatline
+                    cursor.updateRow(row)
+            arcpy.Merge_management([fcExportPath, quadLine],
+                                   exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2")
+            if removeMultiParts:
+                arcpy.MultipartToSinglepart_management(
+                    in_features=exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2",
+                    out_feature_class=exportFDSFullPathNew + "\\" + "CSBContactsAndFaults")
+            else:
+                arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2",
+                                              exportFDSFullPathNew + "\\" + "CSBContactsAndFaults")
+            checkAndDelete(exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2")
+            checkAndDelete(fcExportPath)  # Bcz temp name
         checkAndDelete(fcPath)
     elif fcName in listFCsToSelectByLocation:
         print("    Doing a select by location")
         clipBySelectLocation(exportFDSFullPathNew + "\\" + prefixInitials + fcName)
+    #TODO add a just copy option
     else:
         print("    Ignoring: " + fcName)
 
@@ -437,13 +518,16 @@ if addExtraFCs:
         arcpy.Copy_management(inputExtraFCsPathFDS + "\\" + extraFC, exportFDSFullPathNew + "\\" + extraFC)
 
 usePopulateLabelTool = False
+#TODO not sure that this is not working with Cross Sections .... -partially related to the capitalization of field names
 if populateLabelFromFeatureLinks:
     if usePopulateLabelTool:
         #TODO get this working through the toolbox
         arcpy.populateLabelFromFeatureLinks_SchemaConvert(
-            gdb=exportGDBName,
+            gdb=exportGDBFullPath,
             fds=exportFDSFullPathNew,
-            annos=strlistAnnos, fcs=strlistFCsToSelectByLocation, nullFirst='true')
+            fcs=strlistFCsToSelectByLocation,
+            annos=strlistAnnos,
+            nullFirst='true')
     else:
         print("Populating the Label field from the feature-linked annotations...")
         arcpy.env.workspace = exportGDBFullPath
@@ -498,23 +582,49 @@ if calcIDNumbers:
 if buildPolygons:
     print("Building polygons...")
     #Build polygons lines MUST be labeled ContactsAndFault and points MapUnitPoints
+    #This handles the case where CrossSection ContactsAnd Faults and MapUnitPoints are input
+    if any("CSA" in s for s in listCoreFCs):
+        MapUnitPointsName = 'CSAMapUnitPoints'
+        ContactsAndFaultsName = 'CSAContactsAndFaults'
+        MapUnitPolysName = 'CSAMapUnitPolys'
+        MapUnitPolysIDName = 'CSAMapUnitPolys_ID'
+        print("  CrossSectionA")
+    elif any("CSB" in s for s in listCoreFCs):
+        MapUnitPointsName = 'CSBMapUnitPoints'
+        ContactsAndFaultsName = 'CSBContactsAndFaults'
+        MapUnitPolysName = 'CSBMapUnitPolys'
+        MapUnitPolysIDName = 'CSBMapUnitPolys_ID'
+        print("  CrossSectionB")
+    elif any("CSC" in s for s in listCoreFCs):  # Assumes no more than 3 crosssections #TODO update this
+        MapUnitPointsName = 'CSCMapUnitPoints'
+        ContactsAndFaultsName = 'CSCContactsAndFaults'
+        MapUnitPolysIDName = 'CSCMapUnitPolys_ID'
+        MapUnitPolysName = 'CSCMapUnitPolys'
+        print("  CrossSectionC")
+    else:
+        MapUnitPointsName = 'MapUnitPoints'
+        ContactsAndFaultsName = 'ContactsAndFaults'
+        MapUnitPolysIDName = 'MapUnitPolys_ID'
+        MapUnitPolysName = 'MapUnitPolys'
+        print("  Not a CrossSection")
+
     print("  Populating symbol in MapUnit Points...")
-    arcpy.CalculateField_management(in_table=exportFDSFullPathNew+"\\"+'MapUnitPoints',
+    arcpy.CalculateField_management(in_table=exportFDSFullPathNew+"\\"+MapUnitPointsName,
                                     field='symbol',
                                     expression='[mapunit]',
                                     expression_type='VB',
                                     code_block="")
-    arcpy.FeatureToPolygon_management(in_features=exportFDSFullPathNew+"\\"+'ContactsAndFaults',
-                                          out_feature_class=exportFDSFullPathNew+"\\"+'MapUnitPolys',
+    arcpy.FeatureToPolygon_management(in_features=exportFDSFullPathNew+"\\"+ContactsAndFaultsName,
+                                          out_feature_class=exportFDSFullPathNew+"\\"+MapUnitPolysName,
                                           cluster_tolerance="#",
                                           attributes="ATTRIBUTES",
-                                          label_features=exportFDSFullPathNew+"\\"+'MapUnitPoints')
-    arcpy.AddField_management(in_table=exportFDSFullPathNew+"\\"+'MapUnitPolys',
-                              field_name="MapUnitPolys_ID",
+                                          label_features=exportFDSFullPathNew+"\\"+MapUnitPointsName)
+    arcpy.AddField_management(in_table=exportFDSFullPathNew+"\\"+MapUnitPolysName,
+                              field_name=MapUnitPolysIDName,
                               field_type="TEXT",
                               field_length=50)
     print("  Populating symbol in MapUnit Polys...")
-    arcpy.CalculateField_management(in_table=exportFDSFullPathNew+"\\"+'MapUnitPolys',
+    arcpy.CalculateField_management(in_table=exportFDSFullPathNew+"\\"+MapUnitPolysName,
                                     field='symbol',
                                     expression='[mapunit]',
                                     expression_type='VB',
@@ -681,6 +791,8 @@ if crossWalkFields:
             if finalfc2 in listFCsSwitchTypeAndSymbol:
                 print(" Switching Type to Symbol for: " +finalfc2)
                 arcpy.CalculateField_management(fcpath2, "Symbol", "[Type]")
+            else:
+                print(" NOT Switching Type to Symbol for: " + finalfc2)
     #Note: AttributeByKeyValues fails when other FCs are in the text file
     arcpy.AttributeByKeyValues_GEMS(exportGDBFullPath, txtFile, True)
 
@@ -718,7 +830,8 @@ if crossWalkPolyAndPoints:
             fcpath3 = exportGDBFullPath + "\\" + finalfds3 + "\\" + finalfc3
             #print(finalfc3)
             #print(fcpath3)
-            if finalfc3 in ["MapUnitPoints", "MapUnitPolys"]:
+            if finalfc3 in ["MapUnitPoints", "MapUnitPolys", "CSAMapUnitPoints","CSAMapUnitPolys",
+                            "CSBMapUnitPoints","CSBMapUnitPolys","CSCMapUnitPoints","CSCMapUnitPolys"]: #Handles up to 3 cross-sections not more
                 arcpy.env.workspace = exportGDBFullPath
                 #print(arcpy.env.workspace)
                 edit = arcpy.da.Editor(arcpy.env.workspace)
@@ -915,7 +1028,9 @@ if buildDMU:
                                         'ParagraphStyle', 'Label',
                                         'Symbol', 'AreaFillRGB', 'AreaFillPatternDescription', 'GeoMaterial',
                                         'GeoMaterialConfidence'])
+        #print("TESTING: Started Loop")
         for i, item in enumerate(ForTable_MapUnit):
+            #print("TESTING - Item is: "+str(item))
             cursor.insertRow([ForTable_MapUnit[i], ForTable_UnitName[i], ForTable_Age[i], ForTable_Description[i],
                               ForTable_FullName[i], ForTable_Order[i], ForTable_ParagraphStyle[i], ForTable_Label[i],
                               ForTable_Symbol[i], ForTable_AreaFillRGB[i], ForTable_AreaFillPatternDescription[i],
