@@ -74,6 +74,7 @@ def copyOnlyNeeded(inputfdsfullpath,exportfdsfullpath,exportfdsfullpathnew,input
             print("     Check if exists: "+str(arcpy.Exists(importpath)))
             print("     Export Destintion: "+exportdestination)
             print("  Copying: " + fcInInput)
+            print("     Input path: "+str(inputfdsfullpath+ "\\"+ fcInInput))
             arcpy.Copy_management(inputfdsfullpath+ "\\"+ fcInInput, exportdestination)
         else:
             print("  Skipping: " + fcInInput)
@@ -109,11 +110,11 @@ def parseList(df,col):
 arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
-parametersExcelFilePath = r"extractorParametersCR106.xlsx"
+parametersExcelFilePath = r"extractorParametersBlythe100k106.xlsx"
 #######################################################################################################################
 #Import Options From Excel Sheet
 toolParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ToolPaths',skiprows=1)
-print(toolParameters)
+#print(toolParameters)
 print("--------------------------------------------")
 print("Toolboxes being used: ")
 pathToGeMSToolB=parseValue(toolParameters,'pathToGeMSToolB')
@@ -142,6 +143,7 @@ strlistAnnos = parseValue(inParameters,'listAnnos')
 #These are the feature classes that will NOT be ignored
 listCoreFCs = listFCsToClip + listFCsToSelectByLocation
 listFCsToRename = listFCsToSelectByLocation + listAnnos #These are not renamed during the select by location process
+listEverything = listCoreFCs + listAnnos
 
 inputDBPath = parseValue(inParameters,'inputDBPath')
 inputFDSName= parseValue(inParameters,'inputFDSName')
@@ -336,9 +338,9 @@ if copyEverything:
     print(listCoreFCs)
     for featureClass in listFCSBeforeRemoval:
         coreName=NCGMPname(featureClass,inputPrefixLength)[0]
-        if coreName not in listCoreFCs:
+        if coreName not in listEverything:
             featureClassPath = exportFDSFullPathNew + "\\" + featureClass
-            arcpy.DeleteFeatures_management(featureClassPath)
+            arcpy.Delete_management(featureClassPath) #Previously used DeleteFeatures
             print("   Deleting: " + str(featureClass))
         else:
             print("   Saving: " + str(featureClass))
@@ -783,6 +785,9 @@ if renameAllFields:
 
 if crossWalkFields:
     print("Crosswalking fields...")
+    arcpy.env.workspace = exportGDBFullPath
+    listFDSInGDB = arcpy.ListDatasets()
+
     for finalfds2 in listFDSInGDB:
         listFCsinFinalFDS2 = arcpy.ListFeatureClasses(feature_dataset=finalfds2)
         for finalfc2 in listFCsinFinalFDS2:

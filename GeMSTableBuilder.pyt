@@ -366,15 +366,17 @@ class buildDataSources(object):
         ForTable_URL = []
         ForTable_DataSources = []
         ForTable_MissingDataSources = []
+        arcpy.AddMessage(DataSourcesInMap)
         for dataSource in DataSourcesInMap:
             # This assumes that FGDC-STD-013-2006 will be in the table when it's copied over - don't put it in again
+            arcpy.AddMessage(dataSource)
             if dataSource in master_DataSourceID and dataSource <> "FGDC-STD-013-2006":
                 arcpy.AddMessage("   Data source: " + dataSource + " is in master!")
                 index = master_DataSourceID.index(dataSource)
                 ForTable_Source.append(master_Reference[index])
                 ForTable_URL.append(master_URL[index])
                 ForTable_DataSources.append(dataSource)
-            elif dataSource <> "FGDC-STD-013-2006" and not None:
+            elif dataSource not in ("FGDC-STD-013-2006",None,""," "):
                 arcpy.AddMessage("  >Data source: " + dataSource + " is NOT in the master. Update!!!")
                 ForTable_MissingDataSources.append(dataSource)
             elif dataSource is None or dataSource == "" or dataSource == " ":
