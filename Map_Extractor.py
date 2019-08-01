@@ -110,7 +110,7 @@ def parseList(df,col):
 arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
-parametersExcelFilePath = r"extractorParametersBlythe100k106.xlsx"
+parametersExcelFilePath = r"extractorParametersSMSE.xlsx"
 #######################################################################################################################
 #Import Options From Excel Sheet
 toolParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ToolPaths',skiprows=1)
@@ -284,6 +284,8 @@ calcIDNumbers = parseValue(opParameters,'calcIDNumbers')
 validateDataBase = parseValue(opParameters,'validateDataBase')
 
 populateLabelFromFeatureLinks = parseValue(opParameters,'populateLabelFromFeatureLinks')
+if populateLabelFromFeatureLinks:
+    ignoreAnnos=parseList(opParameters,'ignoreAnnos')
 
 #######################################################################################################################
 #Some Naming stuff
@@ -536,7 +538,11 @@ if populateLabelFromFeatureLinks:
         edit = arcpy.da.Editor(arcpy.env.workspace)
         edit.startEditing(False, True)
         edit.startOperation()
-        for i, anno in enumerate(listAnnos):
+        listAnnosForFeatureLinks=listAnnos
+        if ignoreAnnos:
+            for item in ignoreAnnos:
+                listAnnosForFeatureLinks.remove(item)
+        for i, anno in enumerate(listAnnosForFeatureLinks):
             annoPath = exportFDSFullPathNew + "\\" + anno
             with arcpy.da.SearchCursor(annoPath,
                                        ["featureid", "textstring"]) as cursor:  # Note lowercase names from postgres
