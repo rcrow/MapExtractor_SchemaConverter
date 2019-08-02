@@ -111,6 +111,7 @@ arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
 parametersExcelFilePath = r"extractorParametersSMSE.xlsx"
+# Clip=True #TODO add this parameter to the excel sheet!!!!!
 #######################################################################################################################
 #Import Options From Excel Sheet
 toolParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ToolPaths',skiprows=1)
@@ -167,7 +168,13 @@ opParameters= pandas.read_excel(parametersExcelFilePath , sheet_name='InputsOpti
 print("--------------------------------------------")
 print("Optional parameters being used: ")
 buildPolygons = parseValue(opParameters,'buildPolygons')
-removeQuad = parseValue(opParameters,'removeQuad')
+
+Clip = parseValue(opParameters,'clip')
+if Clip:
+    removeQuad = parseValue(opParameters,'removeQuad')
+else:
+    removeQuad = False
+
 removeMultiParts = parseValue(opParameters,'removeMultiParts')
 
 makeTables = parseValue(opParameters,'makeTables')
@@ -290,7 +297,7 @@ if populateLabelFromFeatureLinks:
 #######################################################################################################################
 #Some Naming stuff
 print("--------------------------------------------")
-print("Starting the core clipping functions: ")
+print("Starting to name stuff: ")
 inputCoreFDSName = inputFDSName.split(".")[-1]  # Cut off anything before the last period
 inputFDSNameWOInitials = NCGMPname(inputCoreFDSName,inputPrefixLength)[0]
 prefixInitials = NCGMPname(inputCoreFDSName,inputPrefixLength)[1]
@@ -314,7 +321,7 @@ arcpy.CreateFileGDB_management(out_folder_path=exportFolder,
 exportFDSFullPath = exportGDBFullPath + "\\" + inputCoreFDSName
 exportFDSFullPathNew = exportGDBFullPath + "\\" + exportFDSPrefix + inputFDSNameWOInitials
 
-#The copyOnlyNeeded stopped working sometime between the release of 10.3.1 and 10.6.1 due to an apparent bug in how
+#The copyOnlyNeeded stopped working sometime between the release of 10.3.1 and 10.6.1 due to an official bug related to how
 #FCs with features-linked annotations are copied using Copy_Managment
 copyEverything=True
 
@@ -361,142 +368,148 @@ else:
                inputPrefixLength,
                listCoreFCs)
 
-#######################################################################################################################
-#Get the quads of interest from the FOCUS area feature class
-# Only use quads that are labeled as active
-quad = exportFDSFullPathNew + "\\" + "selectedQuad"
-quadTemp = exportFDSFullPathNew + "\\" + "TempQuad"
-print(" Finding active boundaries...")
-arcpy.Select_analysis(inquad,
-                      quadTemp,
-                      "Build = 'yes'")
-arcpy.Union_analysis(in_features=quadTemp,
-                     out_feature_class=quad,
-                     join_attributes="ALL", cluster_tolerance="", gaps="GAPS")
-arcpy.DeleteIdentical_management(in_dataset=quad,
-                                 fields="Shape",
-                                 xy_tolerance="",
-                                 z_tolerance="0")
-#TODO do check here to make sure that a polygon ended up in quad
-checkAndDelete(quadTemp)
+if Clip:
+    #######################################################################################################################
+    #Get the quads of interest from the FOCUS area feature class
+    # Only use quads that are labeled as active
+    quad = exportFDSFullPathNew + "\\" + "selectedQuad"
+    quadTemp = exportFDSFullPathNew + "\\" + "TempQuad"
+    print(" Finding active boundaries...")
+    arcpy.Select_analysis(inquad,
+                          quadTemp,
+                          "Build = 'yes'")
+    arcpy.Union_analysis(in_features=quadTemp,
+                         out_feature_class=quad,
+                         join_attributes="ALL", cluster_tolerance="", gaps="GAPS")
+    arcpy.DeleteIdentical_management(in_dataset=quad,
+                                     fields="Shape",
+                                     xy_tolerance="",
+                                     z_tolerance="0")
+    #TODO do check here to make sure that a polygon ended up in quad
+    checkAndDelete(quadTemp)
 
-#######################################################################################################################
-#Copy the db
-arcpy.Copy_management(quad,
-                      exportFDSFullPathNew+"\\"+"QuadBoundary")
+    #######################################################################################################################
+    #Copy the db
+    arcpy.Copy_management(quad,
+                          exportFDSFullPathNew+"\\"+"QuadBoundary")
 
-#######################################################################################################################
-#Make lists of stuff
-arcpy.env.workspace = exportFDSFullPathNew
-listFCsInExportDB = arcpy.ListFeatureClasses("*", "All")
-listLength = len(listFCsInExportDB)
-print(listFCsInExportDB)
-listFCsInExportDB.remove("selectedQuad") #Don't clip the quad with the quad
+    #######################################################################################################################
+    #Make lists of stuff
+    arcpy.env.workspace = exportFDSFullPathNew
+    listFCsInExportDB = arcpy.ListFeatureClasses("*", "All")
+    listLength = len(listFCsInExportDB)
+    print(listFCsInExportDB)
+    listFCsInExportDB.remove("selectedQuad") #Don't clip the quad with the quad
 
-#######################################################################################################################
-#Clipping Everything
-print("Clipping the FCs...")
-# Cycle through all the feature classes
-for fcInExportDB in listFCsInExportDB:
-    fcPath = arcpy.env.workspace + "\\" + fcInExportDB  # Get the full path
-    print(" ####################")
-    print("    Feature class full path: " + fcPath)
-    fcName = NCGMPname(fcInExportDB,inputPrefixLength)[0] #Truncates initial at start of name
-    print("    Feature class name: " + fcName)
-    if fcName == "ContactsAndFaults" or fcName == "CSAContactsAndFaults" or fcName == "CSBContactsAndFaults":
-        fcExportPath = exportFDSFullPathNew+"\\"+fcName+"_temp" #ContactsAndFaults temp till quad added
-    else:
-        fcExportPath = exportFDSFullPathNew + "\\" + fcName
-    if fcName in listFCsToClip: #if in clip array
-        print("    Using Clip")
-        arcpy.Clip_analysis(
-            in_features=fcPath,
-            clip_features=quad,
-            out_feature_class=fcExportPath, #if you export this to the same FDS the feature links seem to be preserved
-            cluster_tolerance="")
-        print("  Finished clipping: " + fcName)
-        if fcName == "ContactsAndFaults":
-            print("CONTACTSANDFAULTS")
-            # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
-            quadLine = exportFDSFullPathNew + "\\" + "quadLines"
-            # Convert the polys to lines
-            arcpy.FeatureToLine_management(quad, quadLine)
-            # This will change the type of everything in the FC to 31.08
-            with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
-                for row in cursor:
-                    row[0] = '31.08' #Map neatline
-                    cursor.updateRow(row)
-            arcpy.Merge_management([fcExportPath, quadLine],
-                                   exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2")
-            if removeMultiParts:
-                arcpy.MultipartToSinglepart_management(
-                    in_features=exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2",
-                    out_feature_class=exportFDSFullPathNew + "\\" + "ContactsAndFaults")
-            else:
-                arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2",
-                                              exportFDSFullPathNew + "\\" + "ContactsAndFaults")
-            checkAndDelete(exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2")
-            checkAndDelete(fcExportPath)  # Bcz temp name
-        elif fcName == "CSAContactsAndFaults":
-            print("CSA_CONTACTSANDFAULTS")
-            # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
-            quadLine = exportFDSFullPathNew + "\\" + "quadLines"
-            # Convert the polys to lines
-            arcpy.FeatureToLine_management(quad, quadLine)
-            # This will change the type of everything in the FC to 31.08
-            with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
-                for row in cursor:
-                    row[0] = '31.08' #Map neatline
-                    cursor.updateRow(row)
-            arcpy.Merge_management([fcExportPath, quadLine],
-                                   exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2")
-            if removeMultiParts:
-                arcpy.MultipartToSinglepart_management(
-                    in_features=exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2",
-                    out_feature_class=exportFDSFullPathNew + "\\" + "CSAContactsAndFaults")
-            else:
-                arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2",
-                                              exportFDSFullPathNew + "\\" + "CSAContactsAndFaults")
-            checkAndDelete(exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2")
-            checkAndDelete(fcExportPath)  # Bcz temp name
-        elif fcName == "CSBContactsAndFaults":
-            print("CSB_CONTACTSANDFAULTS")
-            # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
-            quadLine = exportFDSFullPathNew + "\\" + "quadLines"
-            # Convert the polys to lines
-            arcpy.FeatureToLine_management(quad, quadLine)
-            # This will change the type of everything in the FC to 31.08
-            with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
-                for row in cursor:
-                    row[0] = '31.08' #Map neatline
-                    cursor.updateRow(row)
-            arcpy.Merge_management([fcExportPath, quadLine],
-                                   exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2")
-            if removeMultiParts:
-                arcpy.MultipartToSinglepart_management(
-                    in_features=exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2",
-                    out_feature_class=exportFDSFullPathNew + "\\" + "CSBContactsAndFaults")
-            else:
-                arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2",
-                                              exportFDSFullPathNew + "\\" + "CSBContactsAndFaults")
-            checkAndDelete(exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2")
-            checkAndDelete(fcExportPath)  # Bcz temp name
-        checkAndDelete(fcPath)
-    elif fcName in listFCsToSelectByLocation:
-        print("    Doing a select by location")
-        clipBySelectLocation(exportFDSFullPathNew + "\\" + prefixInitials + fcName)
-    #TODO add a just copy option
-    else:
-        print("    Ignoring: " + fcName)
+    #######################################################################################################################
+    #Clipping Everything
+    print("Clipping the FCs...")
+    # Cycle through all the feature classes
+    for fcInExportDB in listFCsInExportDB:
+        fcPath = arcpy.env.workspace + "\\" + fcInExportDB  # Get the full path
+        print(" ####################")
+        print("    Feature class full path: " + fcPath)
+        fcName = NCGMPname(fcInExportDB,inputPrefixLength)[0] #Truncates initial at start of name
+        print("    Feature class name: " + fcName)
+        if fcName == "ContactsAndFaults" or fcName == "CSAContactsAndFaults" or fcName == "CSBContactsAndFaults":
+            fcExportPath = exportFDSFullPathNew+"\\"+fcName+"_temp" #ContactsAndFaults temp till quad added
+        else:
+            fcExportPath = exportFDSFullPathNew + "\\" + fcName
+        if fcName in listFCsToClip: #if in clip array
+            print("    Using Clip")
+            arcpy.Clip_analysis(
+                in_features=fcPath,
+                clip_features=quad,
+                out_feature_class=fcExportPath, #if you export this to the same FDS the feature links seem to be preserved
+                cluster_tolerance="")
+            print("  Finished clipping: " + fcName)
+            if fcName == "ContactsAndFaults":
+                print("CONTACTSANDFAULTS")
+                # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
+                quadLine = exportFDSFullPathNew + "\\" + "quadLines"
+                # Convert the polys to lines
+                arcpy.FeatureToLine_management(quad, quadLine)
+                # This will change the type of everything in the FC to 31.08
+                with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
+                    for row in cursor:
+                        row[0] = '31.08' #Map neatline
+                        cursor.updateRow(row)
+                arcpy.Merge_management([fcExportPath, quadLine],
+                                       exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2")
+                if removeMultiParts:
+                    arcpy.MultipartToSinglepart_management(
+                        in_features=exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2",
+                        out_feature_class=exportFDSFullPathNew + "\\" + "ContactsAndFaults")
+                else:
+                    arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2",
+                                                  exportFDSFullPathNew + "\\" + "ContactsAndFaults")
+                checkAndDelete(exportFDSFullPathNew + "\\" + "ContactsAndFaults_temp2")
+                checkAndDelete(fcExportPath)  # Bcz temp name
+            elif fcName == "CSAContactsAndFaults":
+                print("CSA_CONTACTSANDFAULTS")
+                # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
+                quadLine = exportFDSFullPathNew + "\\" + "quadLines"
+                # Convert the polys to lines
+                arcpy.FeatureToLine_management(quad, quadLine)
+                # This will change the type of everything in the FC to 31.08
+                with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
+                    for row in cursor:
+                        row[0] = '31.08' #Map neatline
+                        cursor.updateRow(row)
+                arcpy.Merge_management([fcExportPath, quadLine],
+                                       exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2")
+                if removeMultiParts:
+                    arcpy.MultipartToSinglepart_management(
+                        in_features=exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2",
+                        out_feature_class=exportFDSFullPathNew + "\\" + "CSAContactsAndFaults")
+                else:
+                    arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2",
+                                                  exportFDSFullPathNew + "\\" + "CSAContactsAndFaults")
+                checkAndDelete(exportFDSFullPathNew + "\\" + "CSAContactsAndFaults_temp2")
+                checkAndDelete(fcExportPath)  # Bcz temp name
+            elif fcName == "CSBContactsAndFaults":
+                print("CSB_CONTACTSANDFAULTS")
+                # Add quad and build polygons REQUIRES CONTACTS AND FAULTS
+                quadLine = exportFDSFullPathNew + "\\" + "quadLines"
+                # Convert the polys to lines
+                arcpy.FeatureToLine_management(quad, quadLine)
+                # This will change the type of everything in the FC to 31.08
+                with arcpy.da.UpdateCursor(quadLine, ["Type"]) as cursor:
+                    for row in cursor:
+                        row[0] = '31.08' #Map neatline
+                        cursor.updateRow(row)
+                arcpy.Merge_management([fcExportPath, quadLine],
+                                       exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2")
+                if removeMultiParts:
+                    arcpy.MultipartToSinglepart_management(
+                        in_features=exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2",
+                        out_feature_class=exportFDSFullPathNew + "\\" + "CSBContactsAndFaults")
+                else:
+                    arcpy.CopyFeatures_management(exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2",
+                                                  exportFDSFullPathNew + "\\" + "CSBContactsAndFaults")
+                checkAndDelete(exportFDSFullPathNew + "\\" + "CSBContactsAndFaults_temp2")
+                checkAndDelete(fcExportPath)  # Bcz temp name
+            checkAndDelete(fcPath)
+        elif fcName in listFCsToSelectByLocation:
+            print("    Doing a select by location")
+            clipBySelectLocation(exportFDSFullPathNew + "\\" + prefixInitials + fcName)
+        #TODO add a just copy option
+        else:
+            print("    Ignoring: " + fcName)
 
-#######################################################################################################################
-#rename the feature classes with feature linked anno
-print(listFCsToRename)
-for fcToRename in listFCsToRename:
-    print ("Renaming: " + fcToRename)
-    arcpy.Rename_management(in_data=exportFDSFullPathNew + "\\" + prefixInitials + fcToRename,
-                              out_data=exportFDSFullPathNew + "\\" + fcToRename)
-
+    #######################################################################################################################
+    #rename the feature classes with feature linked anno
+    print(listFCsToRename)
+    for fcToRename in listFCsToRename:
+        print ("Renaming: " + fcToRename)
+        arcpy.Rename_management(in_data=exportFDSFullPathNew + "\\" + prefixInitials + fcToRename,
+                                  out_data=exportFDSFullPathNew + "\\" + fcToRename)
+else:
+    print("Not clipping anything")
+    for fcToRename in listEverything:
+        print (" Still renaming: " + fcToRename)
+        arcpy.Rename_management(in_data=exportFDSFullPathNew + "\\" + prefixInitials + fcToRename,
+                                out_data=exportFDSFullPathNew + "\\" + fcToRename)
 #######################################################################################################################
 #OPTIONS
 print("--------------------------------------------")
