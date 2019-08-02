@@ -111,7 +111,6 @@ arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
 parametersExcelFilePath = r"extractorParametersSMSE.xlsx"
-# Clip=True #TODO add this parameter to the excel sheet!!!!!
 #######################################################################################################################
 #Import Options From Excel Sheet
 toolParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ToolPaths',skiprows=1)
