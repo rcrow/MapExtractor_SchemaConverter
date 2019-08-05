@@ -483,7 +483,7 @@ class buildGlossary(object):
         listFDSinGDB = arcpy.ListDatasets()
         TermsInMap = set([])
         Terms = ["Type", "IdentityConfidence", "ExistenceConfidence", "ScientificConfidence", "ParagraphStyle",
-                 "GeoMaterialConfidence", "Scale", "AgeUnits","OrigUnit"]
+                 "Scale", "AgeUnits","OrigUnit"] #Removed "GeoMaterialConfidence"
         if onlyTables == 'true':
             arcpy.AddMessage("  Looking Through Tables Only")
             listTablesinGDB = arcpy.ListTables()
