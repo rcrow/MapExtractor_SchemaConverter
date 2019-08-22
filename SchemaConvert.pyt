@@ -927,7 +927,15 @@ class alacarteToGeMS(object):
             parameterType="Optional",
             direction="Input")
 
-        params = [param0,param1,param2,param3,param4,param5,param6,param7]
+        param8 = arcpy.Parameter(
+            displayName="PTYPE field name in MapUnitPolys:",
+            name="PTYPEname",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+
+        params = [param0,param1,param2,param3,param4,param5,param6,param7,param8]
         return params
 
     def isLicensed(self):
@@ -960,6 +968,7 @@ class alacarteToGeMS(object):
         crosswalk = parameters[5].valueAsText
         datasource = parameters[6].valueAsText
         labelname = parameters[7].valueAsText
+        PTYPEname = parameters[8].valueAsText
 
         #This will only work for users on our network
         arcpy.ImportToolbox(toolbox)
@@ -976,7 +985,7 @@ class alacarteToGeMS(object):
                                   Spatial_reference_system="PROJCS['NAD_1983_UTM_Zone_11N',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Transverse_Mercator'],PARAMETER['False_Easting',500000.0],PARAMETER['False_Northing',0.0],PARAMETER['Central_Meridian',-117.0],PARAMETER['Scale_Factor',0.9996],PARAMETER['Latitude_Of_Origin',0.0],UNIT['Meter',1.0]]",
                                   Optional_feature_classes__tables__and_feature_datasets="",
                                   Number_of_cross_sections="0",
-                                  Enable_edit_tracking="true",
+                                  Enable_edit_tracking="false",
                                   Add_fields_for_cartographic_representations="false",
                                   Add_LTYPE_and_PTTYPE="true",
                                   Add_standard_confidence_values="true")
@@ -987,42 +996,56 @@ class alacarteToGeMS(object):
         #MapUnitPolys
         arcpy.AddMessage("Adding the MapUnitPolys")
 
-        target_layer = gdbPath+"\\"+"GeologicMap"+"\\"+"MapUnitPolys"
-        target_field = "Label"
-        #listTargetFields = ["PTYPE","Label"]
-        append_layer = MapUnitPolys
-        append_field = labelname
-        #listAppendFields = ["PTYPE","PTYPE"] #Substite this second one for the label field is present
+        if labelname or PTYPEname:
+            target_layer = gdbPath+"\\"+"GeologicMap"+"\\"+"MapUnitPolys"
+            #target_field = "Label"
+
+            listTargetFields=[]
+            listAppendFields=[]
+            if labelname:
+                listTargetFields.append("Label")
+                listAppendFields.append(labelname)
+            if PTYPEname:
+                listTargetFields.append("PTYPE")
+                listAppendFields.append(PTYPEname)
+
+            #listTargetFields = ["PTYPE","Label"]
+            append_layer = MapUnitPolys
+            #append_field = labelname
+            #listAppendFields = [PTYPEname,labelname] #Substite this second one for the label field is present
 
 
-        #Code from: https://community.esri.com/thread/185431-append-tool-and-field-mapping-help-examples
-        # This is like defining an empty grid of fields you see when you run it manually in the toolbox
-        fieldmappings = arcpy.FieldMappings()
-        # Add the target datasets fields to the field map table
-        fieldmappings.addTable(target_layer)
-        # Add the append datasets fields to the field map table
-        fieldmappings.addTable(append_layer)
-        # At this point, you have a grid like when you run it manually saved in your field mappings.
-        #####Lets map a field that have different names!
-        #for i, field in enumerate(listTargetFields):
+            #Code from: https://community.esri.com/thread/185431-append-tool-and-field-mapping-help-examples
+            # This is like defining an empty grid of fields you see when you run it manually in the toolbox
+            fieldmappings = arcpy.FieldMappings()
+            # Add the target datasets fields to the field map table
+            fieldmappings.addTable(target_layer)
+            # Add the append datasets fields to the field map table
+            fieldmappings.addTable(append_layer)
+            # At this point, you have a grid like when you run it manually saved in your field mappings.
 
+            #####Lets map a field that have different names!
+            for i, field in enumerate(listTargetFields):
+                # Find which "Index" the field has as we cant refer to them by name when editing the data only index
+                field_to_map_index = fieldmappings.findFieldMapIndex(field)  # Field name that exists in the target layer but not append data source!
+                # Grab "A copy" of the field map object for this particular field
+                field_to_map = fieldmappings.getFieldMap(field_to_map_index)
+                # Update its data source to add the input from the the append layer
+                field_to_map.addInputField(append_layer, listAppendFields[i])
+                #####Lets update the master field map using this updated copy of a field
+                fieldmappings.replaceFieldMap(field_to_map_index, field_to_map)
+                # Create a list of append datasets and run the the tool
 
-
-        # Find which "Index" the field has as we cant refer to them by name when editing the data only index
-        field_to_map_index = fieldmappings.findFieldMapIndex(target_field)  # Field name that exists in the target layer but not append data source!
-        # Grab "A copy" of the field map object for this particular field
-        field_to_map = fieldmappings.getFieldMap(field_to_map_index)
-        # Update its data source to add the input from the the append layer
-        field_to_map.addInputField(append_layer, append_field)
-        #####Lets update the master field map using this updated copy of a field
-        fieldmappings.replaceFieldMap(field_to_map_index, field_to_map)
-        # Create a list of append datasets and run the the tool
-
-        arcpy.Append_management(inputs=MapUnitPolys,
-                                target=gdbPath+"\\"+"GeologicMap"+"\\"+"MapUnitPolys",
-                                schema_type="NO_TEST",
-                                field_mapping=fieldmappings,
-                                subtype="")
+            arcpy.Append_management(inputs=MapUnitPolys,
+                                    target=gdbPath+"\\"+"GeologicMap"+"\\"+"MapUnitPolys",
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldmappings,
+                                    subtype="")
+        else:
+            arcpy.Append_management(inputs=MapUnitPolys,
+                                    target=gdbPath+"\\"+"GeologicMap"+"\\"+"MapUnitPolys",
+                                    schema_type="NO_TEST",
+                                    subtype="")
 
         arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys",
                                         field="MapUnit",
@@ -1052,7 +1075,7 @@ class alacarteToGeMS(object):
 
         #arcpy.AddMessage(datasource)
         if datasource:
-            arcpy.AddMessage("Calcing DataSouceID")
+            arcpy.AddMessage("Calcing DataSourceID")
             fieldname = "DataSourceID"
             arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys",
                                             field=fieldname,
