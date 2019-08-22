@@ -1,0 +1,68 @@
+ContactsAndFaults					
+LTYPE							|Type  				|LocationConfidenceMeters	|ExistenceConfidence|IdentityConfidence	|Symbol		|IsConcealed
+#CONTACTS
+contact, approx					|contact			|-9							|certain			|certain			|01.01.03	|N
+contact, approx. located		|contact			|-9							|certain			|certain			|01.01.03	|N
+contact, approximately located	|contact			|-9							|certain			|certain			|01.01.03	|N
+contact, gradational			|contact			|-9							|certain			|certain			|01.01.17	|N
+contact, certain				|contact			|-9							|certain			|certain			|01.01.01	|N
+contact_certain					|contact			|-9							|certain			|certain			|01.01.01	|N
+contact							|contact			|-9							|certain			|certain			|01.01.01	|N
+contact, concealed				|contact			|-9							|certain			|certain			|01.01.07	|Y
+#*****************CHECH THE FOLLOWING (no plutonic option?)
+contact, plutonic, internal		|contact			|-9							|certain			|certain			|01.01.09	|N
+#FAULTS
+fault, certain					|fault				|-9							|certain			|certain			|02.01.01	|N
+fault							|fault				|-9							|certain			|certain			|02.01.01	|N
+#*****************CHECH THE FOLLOWING (best confidence choices?)
+fault, queried					|fault				|-9							|questionable		|questionable		|02.01.04	|N
+fault, concealed				|fault				|-9							|certain			|certain			|02.01.07	|Y
+#*****************CHECH THE FOLLOWING (best confidence choices?)
+fault, concealed, queried		|fault				|-9							|questionable		|questionable		|02.01.08	|Y
+fault, approx. located			|fault				|-9							|certain			|certain			|02.01.01	|N
+fault, approximately located	|fault				|-9							|certain			|certain			|02.01.01	|N
+normal fault, approx. located	|fault				|-9							|certain			|certain			|02.02.03	|N
+normal fault, certain			|fault				|-9							|certain			|certain			|02.02.01	|N
+fault_normal_certain			|fault				|-9							|certain			|certain			|02.02.01	|N
+normal fault, concealed			|fault				|-9							|certain			|certain			|02.02.07	|Y	
+fault_normal_concealed			|fault				|-9							|certain			|certain			|02.02.07	|Y	
+normal fault, inferred			|fault				|-9							|certain			|certain			|02.02.05	|N	
+fault_normal_inferred			|fault				|-9							|certain			|certain			|02.02.05	|N	
+low-angle fault, certain		|fault				|-9							|certain			|certain			|02.03.01	|N
+fault, low-angle				|fault				|-9							|certain			|certain			|02.03.01	|N
+fault, low-angle, concealed		|fault				|-9							|certain			|certain			|02.03.07	|Y
+detachment fault, certain		|fault				|-9							|certain			|certain			|02.10.01	|N
+detachment fault, concealed 	|fault				|-9							|certain			|certain			|02.10.07	|Y
+thrust fault, certain			|fault				|-9							|certain			|certain			|02.08.01	|N
+thrust fault, concealed			|fault				|-9							|certain			|certain			|02.08.07	|Y
+#*****************CHECH THE FOLLOWING (no attenuation fault option)
+atten. fault, certain			|fault				|-9							|certain			|certain			|99.99.99	|N
+atten. fault, concealed			|fault				|-9							|certain			|certain			|99.99.99	|Y
+#SHORELINES
+water boundary					|shoreline			|-9							|certain			|certain			|30.02.29	|N
+#BOUNDARIES
+map boundary					|map neatline		|0.0						|certain			|certain			|31.08		|N
+map_boundary					|map neatline		|0.0						|certain			|certain			|31.08		|N
+map boundary, certain			|map neatline		|0.0						|certain			|certain			|31.08		|N
+scratch boundary, certain		|sratch boundary	|0.0						|certain			|certain			|31.31		|N
+scratch boundary				|sratch boundary	|0.0						|certain			|certain			|31.31		|N
+#FOLD AXES
+anticline						|fold axis			|-9							|certain			|certain			|05.01.01	|N
+f.a., anticline, certain		|fold axis			|-9							|certain			|certain			|05.01.01	|N
+anticline, approximately located|fold axis			|-9							|certain			|certain			|05.01.03	|N
+anticline, inferred				|fold axis			|-9							|certain			|certain			|05.01.05	|N
+#*****************CHECH THE FOLLOWING (no inferred option)
+anticline, inferred, plunge		|fold axis			|-9							|certain			|certain			|05.10.05	|N
+f.a., anticline, overturned		|fold axis			|-9							|certain			|certain			|05.03.17	|N
+#*****************CHECH THE FOLLOWING (no generic fold axis)
+f.a., fold axis, certain		|fold axis			|-9							|certain			|certain			|99.99.99	|N
+f.a., syncline, certain			|fold axis			|-9							|certain			|certain			|05.05.01	|N
+f.a., syncline, overturned		|fold axis			|-9							|certain			|certain			|05.07.17	|N
+ot syncline						|fold axis			|-9							|certain			|certain			|05.07.17	|N
+syncline						|fold axis			|-9							|certain			|certain			|05.05.01	|N
+#OTHER
+#*****************CHECH THE FOLLOWING (multipe possible matches)
+flow, boundary					|flow edge			|-9							|certain			|certain			|18.32		|N
+shear zone, approx. located		|shear zone			|-9							|certain			|certain			|02.14.01 	|N
+#*****************CHECH THE FOLLOWING (no approximate option)
+lineament, approximately located|lineament			|-9							|certain			|certain			|04.01.01	|N
