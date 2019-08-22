@@ -928,7 +928,7 @@ class alacarteToGeMS(object):
             direction="Input")
 
         param8 = arcpy.Parameter(
-            displayName="PTYPE field name in MapUnitPolys:",
+            displayName="Custom PTYPE field name in MapUnitPolys:",
             name="PTYPEname",
             datatype="GPString",
             parameterType="Optional",
