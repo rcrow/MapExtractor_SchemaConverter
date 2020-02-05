@@ -1,5 +1,6 @@
 import arcpy
 import datetime
+import os
 
 def parsenestedlists(str):
     templist = map(unicode.strip, str.split(","))
@@ -38,6 +39,28 @@ def datetimePrint():
     timestr = hour + ":" + minute
     return [timeDateString, date, timestr, time]
 
+def createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields):
+    # Code from: https://community.esri.com/thread/185431-append-tool-and-field-mapping-help-examples
+    # This is like defining an empty grid of fields you see when you run it manually in the toolbox
+    fieldmappings = arcpy.FieldMappings()
+    # Add the target datasets fields to the field map table
+    fieldmappings.addTable(target_layer)
+    # Add the append datasets fields to the field map table
+    fieldmappings.addTable(append_layer)
+    # At this point, you have a grid like when you run it manually saved in your field mappings.
+
+    #####Lets map a field that have different names!
+    for i, field in enumerate(listTargetFields):
+        # Find which "Index" the field has as we cant refer to them by name when editing the data only index
+        field_to_map_index = fieldmappings.findFieldMapIndex(field)  # Field name that exists in the target layer but not append data source!
+        # Grab "A copy" of the field map object for this particular field
+        field_to_map = fieldmappings.getFieldMap(field_to_map_index)
+        # Update its data source to add the input from the the append layer
+        field_to_map.addInputField(append_layer, listAppendFields[i])
+        #####Lets update the master field map using this updated copy of a field
+        fieldmappings.replaceFieldMap(field_to_map_index, field_to_map)
+        # Create a list of append datasets and run the the tool
+    return fieldmappings
 
 class Toolbox (object):
     def __init__(self):
@@ -49,7 +72,7 @@ class Toolbox (object):
         # List of tool classes associated with this toolbox
         self.tools = [dropFields, dropFieldsFromSpecific, renameFields, nullFields, geomorphUnitConverter,
                       switchSymbolAndType, populateLabelFromFeatureLinks, populateMapUnitConfidence,simplifyHierarcyKeys,
-                      alacarteToGeMS,nbmgToGeMS]
+                      alacarteToGeMS,azgsForMerger,nbmgToGeMS,alacarteOrientPtsToGeMS,alacarteFoldAxesToGeMS,alacarteGenericPtsToGeMS,alacarteAddGeoLinesToGeMS]
 
 class dropFields(object):
     def __init__(self):
@@ -879,63 +902,90 @@ class alacarteToGeMS(object):
             direction="Input")
 
         param1 = arcpy.Parameter(
+            displayName="Spatial Reference of output gdb:",
+            name="SpatialRef",
+            datatype="GPSpatialReference",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
             displayName="DB name:",
             name="dbName",
             datatype="GPString",
             parameterType="Required",
             direction="Input")
 
-        param2 = arcpy.Parameter(
+        param3 = arcpy.Parameter(
             displayName="MapUnitPolys features:",
             name="polys",
             datatype="DEFeatureClass",
             parameterType="Required",
             direction="Input")
 
-        param3 = arcpy.Parameter(
+        param4 = arcpy.Parameter(
             displayName="ContactsAndFaults features:",
             name="arcs",
             datatype="DEFeatureClass",
             parameterType="Required",
             direction="Input")
 
-        param4 = arcpy.Parameter(
+        param5 = arcpy.Parameter(
             displayName="GEMS toolbox:",
             name="GEMS toolbox",
             datatype="Toolbox",
             parameterType="Required",
             direction="Input")
 
-        param5 = arcpy.Parameter(
+        param6 = arcpy.Parameter(
             displayName="Crosswalk Table:",
             name="crosswalk table",
             datatype="DETextFile",
             parameterType="Optional",
             direction="Input")
 
-        param6 = arcpy.Parameter(
+        param7 = arcpy.Parameter(
             displayName="DataSourceID for this map:",
             name="datasource",
             datatype="GPString",
             parameterType="Optional",
             direction="Input")
 
-        param7 = arcpy.Parameter(
-            displayName="Label field name in MapUnitPolys:",
-            name="labelname",
+        param8 = arcpy.Parameter(
+            displayName="Label field name in original mapunit polygons:",
+            name="mapLabelFieldName",
             datatype="GPString",
             parameterType="Optional",
             direction="Input")
 
-        param8 = arcpy.Parameter(
-            displayName="Custom PTYPE field name in MapUnitPolys:",
+        param9 = arcpy.Parameter(
+            displayName="Custom PTYPE field name in original mapunit polygons:",
             name="PTYPEname",
             datatype="GPString",
             parameterType="Optional",
             direction="Input")
 
+        param10 = arcpy.Parameter(
+            displayName="Label field name in original line data:",
+            name="lineLabelFieldName",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
 
-        params = [param0,param1,param2,param3,param4,param5,param6,param7,param8]
+        param11 = arcpy.Parameter(
+            displayName="Custom LTYPE field name in oringal line data:",
+            name="LTYPEname",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param12 = arcpy.Parameter(
+            displayName="Remove xx LTYPES:",
+            name="removeXX",
+            datatype="Boolean",
+            parameterType="Optional",
+            direction="Input")
+
+        params = [param0,param1,param2,param3,param4,param5,param6,param7,param8,param9,param10,param11,param12]
         return params
 
     def isLicensed(self):
@@ -960,15 +1010,19 @@ class alacarteToGeMS(object):
         import os
 
         pathToWorkspace = parameters[0].valueAsText
-        dbName= parameters[1].valueAsText
-        MapUnitPolys = parameters[2].valueAsText
-        ContactsAndFaults = parameters[3].valueAsText
-        toolbox = parameters[4].valueAsText
+        SpatialRef = parameters[1].valueAsText
+        dbName= parameters[2].valueAsText
+        MapUnitPolys = parameters[3].valueAsText
+        ContactsAndFaults = parameters[4].valueAsText
+        toolbox = parameters[5].valueAsText
         toolbox2 = os.path.abspath(__file__)
-        crosswalk = parameters[5].valueAsText
-        datasource = parameters[6].valueAsText
-        labelname = parameters[7].valueAsText
-        PTYPEname = parameters[8].valueAsText
+        crosswalk = parameters[6].valueAsText
+        datasource = parameters[7].valueAsText
+        mapLabelFieldName = parameters[8].valueAsText
+        PTYPEname = parameters[9].valueAsText
+        lineLabelFieldName = parameters[10].valueAsText
+        LTYPEname = parameters[11].valueAsText
+        removeXX = parameters[12].valueAsText
 
         #This will only work for users on our network
         arcpy.ImportToolbox(toolbox)
@@ -979,10 +1033,9 @@ class alacarteToGeMS(object):
         print(" Current Run: " + timeDateString)
         arcpy.AddMessage("Creating a GDB")
 
-        #TODO the spatial reference frame is hardcoded
         arcpy.CreateDatabase_GEMS(Output_Workspace=pathToWorkspace,
                                   Name_of_new_geodatabase=dbName,
-                                  Spatial_reference_system="PROJCS['NAD_1983_UTM_Zone_11N',GEOGCS['GCS_North_American_1983',DATUM['D_North_American_1983',SPHEROID['GRS_1980',6378137.0,298.257222101]],PRIMEM['Greenwich',0.0],UNIT['Degree',0.0174532925199433]],PROJECTION['Transverse_Mercator'],PARAMETER['False_Easting',500000.0],PARAMETER['False_Northing',0.0],PARAMETER['Central_Meridian',-117.0],PARAMETER['Scale_Factor',0.9996],PARAMETER['Latitude_Of_Origin',0.0],UNIT['Meter',1.0]]",
+                                  Spatial_reference_system=SpatialRef,
                                   Optional_feature_classes__tables__and_feature_datasets="",
                                   Number_of_cross_sections="0",
                                   Enable_edit_tracking="false",
@@ -992,54 +1045,25 @@ class alacarteToGeMS(object):
 
         gdbPath=pathToWorkspace+"\\"+dbName+".gdb"
 
-
         #MapUnitPolys
         arcpy.AddMessage("Adding the MapUnitPolys")
 
-        if labelname or PTYPEname:
-            target_layer = gdbPath+"\\"+"GeologicMap"+"\\"+"MapUnitPolys"
-            #target_field = "Label"
-
+        if mapLabelFieldName or PTYPEname:
             listTargetFields=[]
             listAppendFields=[]
-            if labelname:
+            if mapLabelFieldName:
                 listTargetFields.append("Label")
-                listAppendFields.append(labelname)
+                listAppendFields.append(mapLabelFieldName)
             if PTYPEname:
                 listTargetFields.append("PTYPE")
                 listAppendFields.append(PTYPEname)
-
-            #listTargetFields = ["PTYPE","Label"]
+            target_layer = gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys"
             append_layer = MapUnitPolys
-            #append_field = labelname
-            #listAppendFields = [PTYPEname,labelname] #Substite this second one for the label field is present
-
-
-            #Code from: https://community.esri.com/thread/185431-append-tool-and-field-mapping-help-examples
-            # This is like defining an empty grid of fields you see when you run it manually in the toolbox
-            fieldmappings = arcpy.FieldMappings()
-            # Add the target datasets fields to the field map table
-            fieldmappings.addTable(target_layer)
-            # Add the append datasets fields to the field map table
-            fieldmappings.addTable(append_layer)
-            # At this point, you have a grid like when you run it manually saved in your field mappings.
-
-            #####Lets map a field that have different names!
-            for i, field in enumerate(listTargetFields):
-                # Find which "Index" the field has as we cant refer to them by name when editing the data only index
-                field_to_map_index = fieldmappings.findFieldMapIndex(field)  # Field name that exists in the target layer but not append data source!
-                # Grab "A copy" of the field map object for this particular field
-                field_to_map = fieldmappings.getFieldMap(field_to_map_index)
-                # Update its data source to add the input from the the append layer
-                field_to_map.addInputField(append_layer, listAppendFields[i])
-                #####Lets update the master field map using this updated copy of a field
-                fieldmappings.replaceFieldMap(field_to_map_index, field_to_map)
-                # Create a list of append datasets and run the the tool
-
+            fieldMappingsForPolys = createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields)
             arcpy.Append_management(inputs=MapUnitPolys,
                                     target=gdbPath+"\\"+"GeologicMap"+"\\"+"MapUnitPolys",
                                     schema_type="NO_TEST",
-                                    field_mapping=fieldmappings,
+                                    field_mapping=fieldMappingsForPolys,
                                     subtype="")
         else:
             arcpy.Append_management(inputs=MapUnitPolys,
@@ -1062,11 +1086,29 @@ class alacarteToGeMS(object):
 
         #ContactsAndFaults
         arcpy.AddMessage("Adding the ContactsAndFaults")
-        arcpy.Append_management(inputs=ContactsAndFaults,
-                                target=gdbPath+"\\"+"GeologicMap"+"\\"+"ContactsAndFaults",
-                                schema_type="NO_TEST",
-                                field_mapping="",
-                                subtype="")
+
+        if lineLabelFieldName or LTYPEname:
+            listTargetFieldsForLines = []
+            listAppendFieldsForLines = []
+            if lineLabelFieldName:
+                listTargetFieldsForLines.append("Label")
+                listAppendFieldsForLines.append(lineLabelFieldName)
+            if LTYPEname:
+                listTargetFieldsForLines.append("LTYPE")
+                listAppendFieldsForLines.append(LTYPEname)
+            targetLine_layer = gdbPath+"\\"+"GeologicMap"+"\\"+"ContactsAndFaults"
+            appendLine_layer = ContactsAndFaults
+            fieldMappingsForLines = createFieldMappings(targetLine_layer,listTargetFieldsForLines,appendLine_layer,listAppendFieldsForLines)
+            arcpy.Append_management(inputs=ContactsAndFaults,
+                                    target=gdbPath + "\\" + "GeologicMap" + "\\" + "ContactsAndFaults",
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForLines,
+                                    subtype="")
+        else:
+            arcpy.Append_management(inputs=ContactsAndFaults,
+                                    target=gdbPath + "\\" + "GeologicMap" + "\\" + "ContactsAndFaults",
+                                    schema_type="NO_TEST",
+                                    subtype="")
 
         #arcpy.AddMessage(crosswalk)
         if crosswalk:
@@ -1085,6 +1127,14 @@ class alacarteToGeMS(object):
                                             field=fieldname,
                                             expression="'" + datasource + "'", expression_type="PYTHON",
                                             code_block="")
+        if removeXX:
+            arcpy.MakeFeatureLayer_management(gdbPath + "\\" + "GeologicMap" + "\\" + "ContactsAndFaults", "XXlayer")
+
+
+            arcpy.SelectLayerByAttribute_management("XXlayer", 'NEW_SELECTION',
+                                                    '"LTYPE" = \'xx\'')
+            arcpy.DeleteFeatures_management("XXlayer")  # Delete everything outside the quad
+
 
         arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=gdbPath, Use_GUIDs="false",
                                 Do_not_reset_DataSource_IDs="true")
@@ -1094,6 +1144,132 @@ class alacarteToGeMS(object):
 
         for table in listTablesToDelete:
             arcpy.Delete_management(gdbPath+"\\"+table)
+
+class azgsForMerger(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "AZGSForMerger"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="Database for merging:",
+            name="inputDB",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Output Folder:",
+            name="outputfolder",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
+            displayName="Data Source ID:",
+            name="dataSource",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        params = [param0,param1,param2]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+        inputDB = parameters[0].valueAsText
+        dbName = os.path.basename(inputDB)
+        arcpy.AddMessage(dbName)
+        outputfolder = parameters[1].valueAsText
+        arcpy.env.overwriteOutput = True
+        newGDB = outputfolder+"\\"+dbName
+        arcpy.Copy_management(
+            in_data=inputDB,
+            out_data=newGDB,
+            data_type="Workspace")
+        dataSource=parameters[2].valueAsText
+
+        #Adapted from https://community.esri.com/thread/232028-list-domain-values-for-a-field
+        # gdb domains to dictionary # # # # # # #
+        domDict = {} # empty dictionary
+        domains = arcpy.da.ListDomains(newGDB)
+        for domain in domains:
+            if domain.domainType == 'CodedValue':
+                if domain.name not in domDict:
+                    vList = {} # empty list
+                    coded_values = domain.codedValues
+                    for val, desc in coded_values.items():
+                        vList[val]=desc
+                domDict[domain.name] = vList
+        print domDict
+
+        newCAF = newGDB +r"\GeologicMap\ContactsAndFaults"
+
+        # read feature's fields and domains information # # # # # # #
+        fields = arcpy.ListFields(newCAF)
+        fldDict = {} # empty dictionary
+        for field in fields:
+            if len(field.domain):
+                fldDict[field.name] = field.domain
+        print fldDict
+
+        arcpy.env.overwriteOutput = True
+
+        fields = ["RuleID", "Symbol", "DataSourceID"]
+        edit = arcpy.da.Editor(newGDB)
+        edit.startEditing(False, False)
+        edit.startOperation()
+        with arcpy.da.UpdateCursor(newCAF, fields) as cursor:
+            for row in cursor:
+                print("RuleID: "+str(row[0]))
+                # print(domDict[fldDict[fields[0]]])
+                if row[0] in domDict[fldDict[fields[0]]]:
+                    domVal = domDict[fldDict[fields[0]]][row[0]]
+                    print("Domain value: " + str(domDict[fldDict[fields[0]]][row[0]]))
+                    tempList = domVal.split(".")
+                    for num, item in enumerate(tempList):
+                        if len(str(item))< 2:
+                            tempList[num]=tempList[num].zfill(2)
+                    zeroPadded=".".join(tempList)
+                    print(zeroPadded)
+                    row[1]=zeroPadded
+                else:
+                    print("Value not in the domain")
+                row[2]=dataSource
+                cursor.updateRow(row)
+        edit.stopOperation()
+        edit.stopEditing(True)
+
+        newMUP = newGDB +r"\GeologicMap\MapUnitPolys"
+
+        fields = ["DataSourceID"]
+        edit = arcpy.da.Editor(newGDB)
+        edit.startEditing(False, False)
+        edit.startOperation()
+        with arcpy.da.UpdateCursor(newMUP, fields) as cursor:
+            for row in cursor:
+                row[0]=dataSource
+                cursor.updateRow(row)
+        edit.stopOperation()
+        edit.stopEditing(True)
 
 class nbmgToGeMS(object):
     def __init__(self):
@@ -1128,7 +1304,7 @@ class nbmgToGeMS(object):
 
         param3 = arcpy.Parameter(
             displayName="Entity field name in MapUnitPolys:",
-            name="polyslabelname",
+            name="polysmapLabelFieldName",
             datatype="GPString",
             parameterType="Required",
             direction="Input")
@@ -1142,7 +1318,7 @@ class nbmgToGeMS(object):
 
         param5 = arcpy.Parameter(
             displayName="Entity field name in ContactAndFaults:",
-            name="arcslabelname",
+            name="arcsmapLabelFieldName",
             datatype="GPString",
             parameterType="Required",
             direction="Input")
@@ -1192,6 +1368,7 @@ class nbmgToGeMS(object):
 
         import os
 
+        #TODO there is a very similar function at the beginning of this file - keep one or the other
         def makefieldmapping(target_layer,listTargetFields,append_layer,listAppendFields):
             # Code adapted from: https://community.esri.com/thread/185431-append-tool-and-field-mapping-help-examples
             fieldmappings = arcpy.FieldMappings()
@@ -1298,3 +1475,652 @@ class nbmgToGeMS(object):
 
         for table in listTablesToDelete:
             arcpy.Delete_management(gdbPath+"\\"+table)
+
+class alacarteOrientPtsToGeMS(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "AlacarteOrientPtsToGeMS"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="Existing GeMS Geologic Map feature dataset:",
+            name="fds",
+            datatype="DEFeatureDataset",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Points features:",
+            name="points",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
+            displayName="Custom PTTYPE field name in original orientation points:",
+            name="PTYPEname",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param3 = arcpy.Parameter(
+            displayName="Custom STRIKE field name in original orientation points:",
+            name="AzName",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param4 = arcpy.Parameter(
+            displayName="Custom DIP field name in original orientation points:",
+            name="IncName",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param5 = arcpy.Parameter(
+            displayName="Custom LABEL field name in original orientation points:",
+            name="LabelName",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param6 = arcpy.Parameter(
+            displayName="GEMS toolbox:",
+            name="GEMS toolbox",
+            datatype="Toolbox",
+            parameterType="Required",
+            direction="Input")
+
+        param7 = arcpy.Parameter(
+            displayName="Crosswalk Table:",
+            name="crosswalk table",
+            datatype="DETextFile",
+            parameterType="Optional",
+            direction="Input")
+
+        param8 = arcpy.Parameter(
+            displayName="DataSourceID for this map:",
+            name="datasource",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param9 = arcpy.Parameter(
+            displayName="Temp Workspace:",
+            name="workspace",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        params = [param0,param1,param2,param3,param4,param5,param6,param7,param8,param9]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+
+        pathToFDS = parameters[0].valueAsText
+        origPoints = parameters[1].valueAsText
+        PTYPEname = parameters[2].valueAsText
+        AzName = parameters[3].valueAsText
+        IncName = parameters[4].valueAsText
+        LabelName = parameters[5].valueAsText
+        toolbox = parameters[6].valueAsText
+        arcpy.ImportToolbox(toolbox)
+        crosswalk = parameters[7].valueAsText
+        datasource = parameters[8].valueAsText
+        pathToTemp = parameters[9].valueAsText
+        spatial_ref = arcpy.Describe(pathToFDS).spatialReference
+
+        arcpy.env.overwriteOutput = True
+
+        if arcpy.Exists(pathToTemp+"\\"+"TempOrient.gdb"):
+            arcpy.AddMessage("Create Database has already run, using previous files")
+        else:
+            #TODO check to see if the GDB already exists (from a previous run) before creating it again?
+            arcpy.CreateDatabase_GEMS(Output_Workspace=pathToTemp,
+                                      Name_of_new_geodatabase="TempOrient",
+                                      Spatial_reference_system=spatial_ref,
+                                      Optional_feature_classes__tables__and_feature_datasets="OrientationPoints",
+                                      Number_of_cross_sections="0",
+                                      Enable_edit_tracking="true",
+                                      Add_fields_for_cartographic_representations="false",
+                                      Add_LTYPE_and_PTTYPE="true",
+                                      Add_standard_confidence_values="true")
+
+        arcpy.Copy_management(pathToTemp+"\\"+"TempOrient.gdb"+r"\GeologicMap\OrientationPoints",pathToFDS+"\\"+"OrientationPoints")
+
+        listTargetFields = []
+        listAppendFields = []
+        if PTYPEname or AzName or IncName or LabelName:
+            if PTYPEname:
+                listTargetFields.append("PTTYPE")
+                listAppendFields.append(PTYPEname)
+            if AzName:
+                listTargetFields.append("Azimuth")
+                listAppendFields.append(AzName)
+            else:
+                listTargetFields.append("Azimuth")
+                listAppendFields.append("STRIKE")
+            if IncName:
+                listTargetFields.append("Inclination")
+                listAppendFields.append(IncName)
+            else:
+                listTargetFields.append("Inclination")
+                listAppendFields.append("DIP")
+            if LabelName:
+                listTargetFields.append("Label")
+                listAppendFields.append(LabelName)
+            else:
+                listTargetFields.append("Label")
+                listAppendFields.append("LABEL")
+            target_layer = pathToFDS+"\\"+"OrientationPoints"
+            append_layer = origPoints
+            fieldMappingsForOrient = createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields)
+            arcpy.Append_management(inputs=origPoints,
+                                    target=pathToFDS+"\\"+"OrientationPoints",
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForOrient,
+                                    subtype="")
+        else:
+            listTargetFields.append("Inclination")
+            listAppendFields.append("DIP")
+            listTargetFields.append("Azimuth")
+            listAppendFields.append("STRIKE")
+            listTargetFields.append("Label")
+            listAppendFields.append("LABEL")
+            target_layer = pathToFDS+"\\"+"OrientationPoints"
+            append_layer = origPoints
+            fieldMappingsForOrient = createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields)
+            arcpy.Append_management(inputs=origPoints,
+                                    target=pathToFDS+"\\"+"OrientationPoints",
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForOrient,
+                                    subtype="")
+
+            if crosswalk:
+                arcpy.AddMessage("Doing Crosswalk")
+                #This converts a FDS Path to a GDB path
+                gdbPath = pathToFDS[:len(pathToFDS)-len(pathToFDS.split("\\")[-1])-1]
+                arcpy.AttributeByKeyValues_GEMS(gdbPath, crosswalk, True)
+
+            if datasource:
+                arcpy.AddMessage("Calcing DataSourceID")
+                fieldname = "OrientationSourceID"
+                arcpy.CalculateField_management(in_table=pathToFDS+"\\"+"OrientationPoints",
+                                                field=fieldname,
+                                                expression="'" + datasource + "'", expression_type="PYTHON",
+                                                code_block="")
+
+            arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=gdbPath, Use_GUIDs="false",
+                                    Do_not_reset_DataSource_IDs="true")
+
+class alacarteFoldAxesToGeMS(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "AlacarteFoldAxesToGeMS"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="Existing GeMS Geologic Map feature dataset:",
+            name="fds",
+            datatype="DEFeatureDataset",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Geologic lines:",
+            name="geolines",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
+            displayName="Custom LTYPE field name in original mapunit polygons:",
+            name="LTYPEname",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param3 = arcpy.Parameter(
+            displayName="Label field name in original geologic lines feature class:",
+            name="labelFieldName",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param4 = arcpy.Parameter(
+            displayName="GEMS toolbox:",
+            name="GEMS toolbox",
+            datatype="Toolbox",
+            parameterType="Required",
+            direction="Input")
+
+        param5 = arcpy.Parameter(
+            displayName="Crosswalk Table:",
+            name="crosswalk table",
+            datatype="DETextFile",
+            parameterType="Optional",
+            direction="Input")
+
+        param6 = arcpy.Parameter(
+            displayName="DataSourceID for this map:",
+            name="datasource",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param7 = arcpy.Parameter(
+            displayName="Temp Workspace:",
+            name="workspace",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        params = [param0,param1,param2,param3,param4,param5,param6,param7]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+
+        pathToFDS = parameters[0].valueAsText
+        geolines = parameters[1].valueAsText
+        LTYPEname = parameters[2].valueAsText
+        labelFieldName = parameters[3].valueAsText
+        toolbox = parameters[4].valueAsText
+        arcpy.ImportToolbox(toolbox)
+        crosswalk = parameters[5].valueAsText
+        datasource = parameters[6].valueAsText
+        pathToTemp = parameters[7].valueAsText
+        spatial_ref = arcpy.Describe(pathToFDS).spatialReference
+
+        arcpy.env.overwriteOutput = True
+
+        if arcpy.Exists(pathToTemp+"\\"+"TempGeoLine.gdb"):
+            arcpy.AddMessage("Create Database has already run, using previous files")
+        else:
+            #TODO when switching between tools the geodatabase needs to be deleted by hand -fix
+            arcpy.CreateDatabase_GEMS(Output_Workspace=pathToTemp,
+                                      Name_of_new_geodatabase="TempGeoLine",
+                                      Spatial_reference_system=spatial_ref,
+                                      Optional_feature_classes__tables__and_feature_datasets="GeologicLines",
+                                      Number_of_cross_sections="0",
+                                      Enable_edit_tracking="true",
+                                      Add_fields_for_cartographic_representations="false",
+                                      Add_LTYPE_and_PTTYPE="true",
+                                      Add_standard_confidence_values="true")
+
+        arcpy.Copy_management(pathToTemp+"\\"+"TempGeoLine.gdb"+r"\GeologicMap\GeologicLines",pathToFDS+"\\"+"GeologicLines")
+
+        listTargetFields = []
+        listAppendFields = []
+        if LTYPEname or labelFieldName:
+            if LTYPEname:
+                listTargetFields.append("LTYPE")
+                listAppendFields.append(LTYPEname)
+            if labelFieldName:
+                listTargetFields.append("Label")
+                listAppendFields.append(labelFieldName)
+            else:
+                listTargetFields.append("Label")
+                listAppendFields.append("LABEL")
+            target_layer = pathToFDS+"\\"+"GeologicLines"
+            append_layer = geolines
+            fieldMappingsForGeoLines = createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields)
+            arcpy.Append_management(inputs=geolines,
+                                    target=pathToFDS+"\\"+"GeologicLines",
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForGeoLines,
+                                    subtype="")
+        else:
+            listTargetFields.append("Label")
+            listAppendFields.append("LABEL")
+            target_layer = pathToFDS+"\\"+"GeologicLines"
+            append_layer = geolines
+            fieldMappingsForGeoLines = createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields)
+            arcpy.Append_management(inputs=geolines,
+                                    target=pathToFDS+"\\"+"GeologicLines",
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForGeoLines,
+                                    subtype="")
+
+        if crosswalk:
+            arcpy.AddMessage("Doing Crosswalk")
+            #This converts a FDS Path to a GDB path
+            gdbPath = pathToFDS[:len(pathToFDS)-len(pathToFDS.split("\\")[-1])-1]
+            arcpy.AttributeByKeyValues_GEMS(gdbPath, crosswalk, True)
+
+        if datasource:
+            arcpy.AddMessage("Calcing DataSourceID")
+            fieldname = "DataSourceID"
+            arcpy.CalculateField_management(in_table=pathToFDS+"\\"+"GeologicLines",
+                                            field=fieldname,
+                                            expression="'" + datasource + "'", expression_type="PYTHON",
+                                            code_block="")
+
+        arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=gdbPath, Use_GUIDs="false",
+                                Do_not_reset_DataSource_IDs="true")
+
+class alacarteGenericPtsToGeMS(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "AlacarteGenericPtsToGeMS"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="Existing GeMS Geologic Map feature dataset:",
+            name="fds",
+            datatype="DEFeatureDataset",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Points features:",
+            name="points",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
+            displayName="New featureclass name:",
+            name="FCname",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        param3 = arcpy.Parameter(
+            displayName="Custom PTTYPE field name in original mapunit polygons:",
+            name="PTYPEname",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param4 = arcpy.Parameter(
+            displayName="GEMS toolbox:",
+            name="GEMS toolbox",
+            datatype="Toolbox",
+            parameterType="Required",
+            direction="Input")
+
+        param5 = arcpy.Parameter(
+            displayName="Crosswalk Table:",
+            name="crosswalk table",
+            datatype="DETextFile",
+            parameterType="Optional",
+            direction="Input")
+
+        param6 = arcpy.Parameter(
+            displayName="DataSourceID for this map:",
+            name="datasource",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param7 = arcpy.Parameter(
+            displayName="Temp Workspace:",
+            name="workspace",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        params = [param0,param1,param2,param3,param4,param5,param6,param7]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+
+        pathToFDS = parameters[0].valueAsText
+        points = parameters[1].valueAsText
+        FCname = parameters[2].valueAsText
+        PTYPEname = parameters[3].valueAsText
+        toolbox = parameters[4].valueAsText
+        arcpy.ImportToolbox(toolbox)
+        crosswalk = parameters[5].valueAsText
+        datasource = parameters[6].valueAsText
+        pathToTemp = parameters[7].valueAsText
+        spatial_ref = arcpy.Describe(pathToFDS).spatialReference
+
+        arcpy.env.overwriteOutput = True
+
+        if arcpy.Exists(pathToTemp+"\\"+"TempGeneric.gdb"):
+            arcpy.AddMessage("Create Database has already run, using previous files")
+        else:
+            #TODO check to see if the GDB already exists (from a previous run) before creating it again?
+            arcpy.CreateDatabase_GEMS(Output_Workspace=pathToTemp,
+                                      Name_of_new_geodatabase="TempGeneric",
+                                      Spatial_reference_system=spatial_ref,
+                                      Optional_feature_classes__tables__and_feature_datasets="GenericPoints",
+                                      Number_of_cross_sections="0",
+                                      Enable_edit_tracking="true",
+                                      Add_fields_for_cartographic_representations="false",
+                                      Add_LTYPE_and_PTTYPE="true",
+                                      Add_standard_confidence_values="true")
+
+        arcpy.Copy_management(pathToTemp+"\\"+"TempGeneric.gdb"+r"\GeologicMap\GenericPoints",pathToFDS+"\\"+FCname)
+
+        listTargetFields = []
+        listAppendFields = []
+        if PTYPEname:
+            listTargetFields.append("PTTYPE")
+            listAppendFields.append(PTYPEname)
+            target_layer = pathToFDS+"\\"+FCname
+            append_layer = points
+            fieldMappingsForGeneric = createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields)
+            arcpy.Append_management(inputs=points,
+                                    target=pathToFDS+"\\"+FCname,
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForGeneric,
+                                    subtype="")
+        else:
+            target_layer = pathToFDS+"\\"+FCname
+            append_layer = points
+            fieldMappingsForGeneric = createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields)
+            arcpy.Append_management(inputs=points,
+                                    target=pathToFDS+"\\"+FCname,
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForGeneric,
+                                    subtype="")
+
+        # This converts a FDS Path to a GDB path
+        gdbPath = pathToFDS[:len(pathToFDS) - len(pathToFDS.split("\\")[-1]) - 1]
+        if crosswalk:
+            arcpy.AddMessage("Doing Crosswalk")
+
+            arcpy.AttributeByKeyValues_GEMS(gdbPath, crosswalk, True)
+
+        if datasource:
+            arcpy.AddMessage("Calcing DataSourceID")
+            fieldname = "DataSourceID"
+            arcpy.CalculateField_management(in_table=pathToFDS+"\\"+FCname,
+                                            field=fieldname,
+                                            expression="'" + datasource + "'", expression_type="PYTHON",
+                                            code_block="")
+
+        arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=gdbPath, Use_GUIDs="false",
+                                Do_not_reset_DataSource_IDs="true")
+
+class alacarteAddGeoLinesToGeMS(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "AlacarteAddGeoLinesToGeMS"
+        self.description = ""
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+
+        param0 = arcpy.Parameter(
+            displayName="Existing GeMS GeologicLines FC:",
+            name="geolinesTarget",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input")
+
+        param1 = arcpy.Parameter(
+            displayName="Geologic lines to be added:",
+            name="geolinesNew",
+            datatype="DEFeatureClass",
+            parameterType="Required",
+            direction="Input")
+
+        param2 = arcpy.Parameter(
+            displayName="Custom LTYPE field name in original mapunit polygons:",
+            name="LTYPEname",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param3 = arcpy.Parameter(
+            displayName="GEMS toolbox:",
+            name="GEMS toolbox",
+            datatype="Toolbox",
+            parameterType="Required",
+            direction="Input")
+
+        param4 = arcpy.Parameter(
+            displayName="Crosswalk Table:",
+            name="crosswalk table",
+            datatype="DETextFile",
+            parameterType="Optional",
+            direction="Input")
+
+        param5 = arcpy.Parameter(
+            displayName="DataSourceID for this map:",
+            name="datasource",
+            datatype="GPString",
+            parameterType="Optional",
+            direction="Input")
+
+        param6 = arcpy.Parameter(
+            displayName="Temp Workspace:",
+            name="workspace",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+
+        params = [param0, param1, param2, param3, param4, param5, param6]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+
+        geolinesTarget = parameters[0].valueAsText
+        geolinesNew = parameters[1].valueAsText
+        LTYPEname = parameters[2].valueAsText
+        toolbox = parameters[3].valueAsText
+        arcpy.ImportToolbox(toolbox)
+        crosswalk = parameters[4].valueAsText
+        datasource = parameters[5].valueAsText
+        pathToTemp = parameters[6].valueAsText
+        spatial_ref = arcpy.Describe(geolinesTarget).spatialReference
+
+        arcpy.env.overwriteOutput = True
+
+        listTargetFields = []
+        listAppendFields = []
+        if LTYPEname:
+            listTargetFields.append("LTYPE")
+            listAppendFields.append(LTYPEname)
+            target_layer = geolinesTarget
+            append_layer = geolinesNew
+            fieldMappingsForGeoLines = createFieldMappings(target_layer, listTargetFields, append_layer,
+                                                           listAppendFields)
+            arcpy.Append_management(inputs=geolinesNew,
+                                    target=geolinesTarget,
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForGeoLines,
+                                    subtype="")
+        else:
+            target_layer = geolinesTarget
+            append_layer = geolinesNew
+            fieldMappingsForGeoLines = createFieldMappings(target_layer, listTargetFields, append_layer,
+                                                           listAppendFields)
+            arcpy.Append_management(inputs=geolinesNew,
+                                    target=geolinesTarget,
+                                    schema_type="NO_TEST",
+                                    field_mapping=fieldMappingsForGeoLines,
+                                    subtype="")
+
+        # This converts a FC Path to a GDB path (assumes that the FC is in Geologic Map FDS - will fail if it is not)
+        gdbPath = geolinesTarget[:len(geolinesTarget)-(len(geolinesTarget.split("\\")[-2])+len(geolinesTarget.split("\\")[-1])+2)]
+        if crosswalk:
+            arcpy.AddMessage("Doing Crosswalk")
+            arcpy.AttributeByKeyValues_GEMS(gdbPath, crosswalk, True)
+
+        if datasource:
+            arcpy.AddMessage("Calcing DataSourceID")
+            fieldname = "DataSourceID"
+            arcpy.CalculateField_management(in_table=geolinesTarget,
+                                            field=fieldname,
+                                            expression="'" + datasource + "'", expression_type="PYTHON",
+                                            code_block="")
+
+        arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=gdbPath, Use_GUIDs="false",
+                                Do_not_reset_DataSource_IDs="true")

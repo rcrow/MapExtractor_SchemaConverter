@@ -757,8 +757,10 @@ if addExtraTable:
 if addDRG:
     print("Adding the DRG...")
     arcpy.env.workspace = exportGDBFullPath
+    #TODO add this as an option
+    DRGname="CompositeBasemap"
     arcpy.Clip_management(in_raster=inputDRGRasterMosaic,
-                          out_raster="DRG",
+                          out_raster=DRGname,
                           in_template_dataset=quad, nodata_value="256",
                           clipping_geometry="ClippingGeometry", maintain_clipping_extent="NO_MAINTAIN_EXTENT")
 
@@ -866,6 +868,7 @@ if crossWalkPolyAndPoints:
                             row3[1] = "certain"
                         else:
                             row3[1] = "questionable"
+                            row3[0] = row3[0][:-1]
                         cursor3.updateRow(row3)
                 edit.stopOperation()
                 edit.stopEditing(True)
