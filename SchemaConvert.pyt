@@ -1654,22 +1654,22 @@ class alacarteOrientPtsToGeMS(object):
                                     field_mapping=fieldMappingsForOrient,
                                     subtype="")
 
-            if crosswalk:
-                arcpy.AddMessage("Doing Crosswalk")
-                #This converts a FDS Path to a GDB path
-                gdbPath = pathToFDS[:len(pathToFDS)-len(pathToFDS.split("\\")[-1])-1]
-                arcpy.AttributeByKeyValues_GEMS(gdbPath, crosswalk, True)
+        if crosswalk is not None:
+            arcpy.AddMessage("Doing Crosswalk")
+            #This converts a FDS Path to a GDB path
+            gdbPath = pathToFDS[:len(pathToFDS)-len(pathToFDS.split("\\")[-1])-1]
+            arcpy.AttributeByKeyValues_GEMS(gdbPath, crosswalk, True)
 
-            if datasource:
-                arcpy.AddMessage("Calcing DataSourceID")
-                fieldname = "OrientationSourceID"
-                arcpy.CalculateField_management(in_table=pathToFDS+"\\"+"OrientationPoints",
-                                                field=fieldname,
-                                                expression="'" + datasource + "'", expression_type="PYTHON",
-                                                code_block="")
+        if datasource is not None:
+            arcpy.AddMessage("Calcing DataSourceID")
+            fieldname = "OrientationSourceID"
+            arcpy.CalculateField_management(in_table=pathToFDS+"\\"+"OrientationPoints",
+                                            field=fieldname,
+                                            expression="'" + datasource + "'", expression_type="PYTHON",
+                                            code_block="")
 
-            arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=gdbPath, Use_GUIDs="false",
-                                    Do_not_reset_DataSource_IDs="true")
+        arcpy.SetIDvalues2_GEMS(Input_GeMS_style_geodatabase=gdbPath, Use_GUIDs="false",
+                                Do_not_reset_DataSource_IDs="true")
 
 class alacarteFoldAxesToGeMS(object):
     def __init__(self):
