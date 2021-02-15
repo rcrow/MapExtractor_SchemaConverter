@@ -1024,8 +1024,7 @@ class alacarteToGeMS(object):
         LTYPEname = parameters[11].valueAsText
         removeXX = parameters[12].valueAsText
 
-        #This will only work for users on our network
-        arcpy.ImportToolbox(toolbox)
+        arcpy.ImportToolbox(toolbox, "GEMS") #Getting wierd errors related to using the original alias "GEMS"
         arcpy.ImportToolbox(toolbox2)
         arcpy.env.overwriteOutput = True
         # Create a new GDB
@@ -1392,8 +1391,7 @@ class nbmgToGeMS(object):
         crosswalk = parameters[7].valueAsText
         datasource = parameters[8].valueAsText
 
-        #This will only work for users on our network
-        arcpy.ImportToolbox(toolbox)
+        arcpy.ImportToolbox(toolbox) #Getting wierd errors at a similar place in alacarteToGems see solution used there...
         arcpy.ImportToolbox(toolbox2)
         arcpy.env.overwriteOutput = True
         # Create a new GDB
@@ -1633,6 +1631,7 @@ class alacarteOrientPtsToGeMS(object):
                 listAppendFields.append("LABEL")
             target_layer = pathToFDS+"\\"+"OrientationPoints"
             append_layer = origPoints
+            #Fails if original data is missing one of the required fields (e.g. has no LABEL field)
             fieldMappingsForOrient = createFieldMappings(target_layer,listTargetFields,append_layer,listAppendFields)
             arcpy.Append_management(inputs=origPoints,
                                     target=pathToFDS+"\\"+"OrientationPoints",
