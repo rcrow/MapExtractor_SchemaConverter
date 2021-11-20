@@ -1218,7 +1218,7 @@ class azgsForMerger(object):
                     for val, desc in coded_values.items():
                         vList[val]=desc
                 domDict[domain.name] = vList
-        print domDict
+        print(domDict)
 
         newCAF = newGDB +r"\GeologicMap\ContactsAndFaults"
 
@@ -1228,7 +1228,7 @@ class azgsForMerger(object):
         for field in fields:
             if len(field.domain):
                 fldDict[field.name] = field.domain
-        print fldDict
+        print(fldDict)
 
         arcpy.env.overwriteOutput = True
 
