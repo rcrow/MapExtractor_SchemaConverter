@@ -1018,20 +1018,27 @@ class alacarteToGeMS(object):
         toolbox2 = os.path.abspath(__file__)
         crosswalk = parameters[6].valueAsText
         datasource = parameters[7].valueAsText
+        arcpy.AddMessage("Datasource: " + str(datasource))  # for debugging
         mapLabelFieldName = parameters[8].valueAsText
+        arcpy.AddMessage("MapLabelFieldName: " + str(mapLabelFieldName))  # for debugging
         PTYPEname = parameters[9].valueAsText
+        arcpy.AddMessage("PTYPEFieldName: " + str(PTYPEname))  # for debugging
         lineLabelFieldName = parameters[10].valueAsText
+        arcpy.AddMessage("LineLabelFieldName: " + str(lineLabelFieldName))  # for debugging
         LTYPEname = parameters[11].valueAsText
+        arcpy.AddMessage("LTYPEFieldName: " + str(LTYPEname))  # for debugging
         removeXX = parameters[12].valueAsText
+
 
         arcpy.ImportToolbox(toolbox, "GEMS") #Getting wierd errors related to using the original alias "GEMS"
         arcpy.ImportToolbox(toolbox2)
         arcpy.env.overwriteOutput = True
         # Create a new GDB
         timeDateString = datetimePrint()[0] # Gets time and date to add to export
-        print(" Current Run: " + timeDateString)
+        arcpy.AddMessage(" Current Run: " + timeDateString)
         arcpy.AddMessage("Creating a GDB")
 
+        #Will fail if database already exists as mentioned in tool help
         arcpy.CreateDatabase_GEMS(Output_Workspace=pathToWorkspace,
                                   Name_of_new_geodatabase=dbName,
                                   Spatial_reference_system=SpatialRef,
@@ -1048,6 +1055,7 @@ class alacarteToGeMS(object):
         arcpy.AddMessage("Adding the MapUnitPolys")
 
         if mapLabelFieldName or PTYPEname:
+            arcpy.AddMessage("Map Label Field or PTYPE Field input")
             listTargetFields=[]
             listAppendFields=[]
             if mapLabelFieldName:
