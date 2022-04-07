@@ -1,5 +1,5 @@
 Map-Extractor
-Tested in ArcMap 10.3.1
+Tested in ArcMap 10.3.1, using pandas 0.23.4, numpy 1.16.4/1.16.6, xlrd 1.1.0
 
 Written by Ryan Crow and Tracey Felger, USGS
 

@@ -110,10 +110,10 @@ def parseList(df,col):
 arcpy.env.overwriteOutput = True
 start = datetimePrint()[3]
 
-parametersExcelFilePath = r"extractorParametersCARROFF.xlsx"
+parametersExcelFilePath = r"extractorParametersCARROFF_20220329.xlsx"
 #######################################################################################################################
 #Import Options From Excel Sheet
-toolParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ToolPaths',skiprows=1)
+toolParameters= pandas.read_excel(parametersExcelFilePath, sheet_name='ToolPaths', skiprows=1)
 #print(toolParameters)
 print("--------------------------------------------")
 print("Toolboxes being used: ")
@@ -564,7 +564,7 @@ if populateLabelFromFeatureLinks:
                     listFeatureIds.append(row[0])
                     listLabels.append(row[1])
             fcPath = exportFDSFullPathNew + "\\" + listFCsToSelectByLocation[i]
-            arcpy.CalculateField_management(fcPath, "label", "NULL")
+            arcpy.CalculateField_management(fcPath, "label", "None", "PYTHON")  #20220407 Had to change this from VB to Python ERROR 000989
             with arcpy.da.UpdateCursor(fcPath, ["objectid", "label"]) as editcursor:
                 for editrow in editcursor:
                     if editrow[0] in listFeatureIds:
@@ -631,8 +631,8 @@ if buildPolygons:
     print("  Populating symbol in MapUnit Points...")
     arcpy.CalculateField_management(in_table=exportFDSFullPathNew+"\\"+MapUnitPointsName,
                                     field='symbol',
-                                    expression='[mapunit]',
-                                    expression_type='VB',
+                                    expression='!mapunit!',
+                                    expression_type='PYTHON', #20220407 Had to change this from VB to Python ERROR 000989
                                     code_block="")
     arcpy.FeatureToPolygon_management(in_features=exportFDSFullPathNew+"\\"+ContactsAndFaultsName,
                                           out_feature_class=exportFDSFullPathNew+"\\"+MapUnitPolysName,
@@ -646,8 +646,8 @@ if buildPolygons:
     print("  Populating symbol in MapUnit Polys...")
     arcpy.CalculateField_management(in_table=exportFDSFullPathNew+"\\"+MapUnitPolysName,
                                     field='symbol',
-                                    expression='[mapunit]',
-                                    expression_type='VB',
+                                    expression='!mapunit!',
+                                    expression_type='PYTHON', #20220407 Had to change this from VB to Python ERROR 000989
                                     code_block="")
 
 if simplifyGeomorphLines:
@@ -707,7 +707,7 @@ if nullFields:
                 cannull = field[0].isNullable
                 if cannull:
                     print("  Nulling: " + fieldname)
-                    arcpy.CalculateField_management(fctonull, fieldname, "NULL")
+                    arcpy.CalculateField_management(fctonull, fieldname, "None", "PYTHON")   #20220407 Had to change this from VB to Python ERROR 000989
                 else:
                     if forceNull:
                         print(" Forcing Null...")
@@ -726,13 +726,13 @@ if nullFields:
                                 arcpy.CalculateField_management(in_table=fctonull,
                                                                 field=fieldname,
                                                                 expression="-9999",
-                                                                expression_type="VB",
+                                                                expression_type="PYTHON",
                                                                 code_block="")
                             elif fieldtype == "String" and fieldlength > 4:
                                 print("    Calcing to #null...")
                                 arcpy.CalculateField_management(in_table=fctonull,
                                                                 field=fieldname,
-                                                                expression=fieldname + " = " + "\"#null\"",
+                                                                expression=fieldname + " = " + "\"#null\"", #TODO change to PYTHON
                                                                 expression_type="VB",
                                                                 code_block="")
 
@@ -740,7 +740,7 @@ if nullFields:
                                 print("    Calcing to #...")
                                 arcpy.CalculateField_management(in_table=fctonull,
                                                                 field=fieldname,
-                                                                expression=fieldname + " = " + "\"#\"",
+                                                                expression=fieldname + " = " + "\"#\"", #TODO change to PYTHON
                                                                 expression_type="VB",
                                                                 code_block="")
                             else:
@@ -815,7 +815,7 @@ if crossWalkFields:
             #print(finalfc2)
             if finalfc2 in listFCsSwitchTypeAndSymbol:
                 print(" Switching Type to Symbol for: " +finalfc2)
-                arcpy.CalculateField_management(fcpath2, "Symbol", "[Type]")
+                arcpy.CalculateField_management(fcpath2, "Symbol", "!Type!", "PYTHON")  #20220407 Had to change this from VB to Python ERROR 000989
             else:
                 print(" NOT Switching Type to Symbol for: " + finalfc2)
     #Note: AttributeByKeyValues fails when other FCs are in the text file
@@ -1073,20 +1073,19 @@ if buildDMU:
 
         if nullDescription:
             arcpy.AddMessage("Nulling the Description field...")
-            arcpy.CalculateField_management(DMUTablePath, 'Description', "NULL")
+            arcpy.CalculateField_management(DMUTablePath, 'Description', "None", "PYTHON")  #20220407 Had to change this from VB to Python ERROR 000989
 
         if nullFillPattern:
             arcpy.AddMessage("Nulling the AreaFillPatternDescription field...")
-            arcpy.CalculateField_management(DMUTablePath, 'AreaFillPatternDescription', "NULL")
+            arcpy.CalculateField_management(DMUTablePath, 'AreaFillPatternDescription', "None", "PYTHON")  #20220407 Had to change this from VB to Python ERROR 000989
 
         if calculateIDs:
             arcpy.AddMessage("Calculating DescriptionOfMapUnits IDs...")
-            arcpy.CalculateField_management(DMUTablePath, 'DescriptionOfMapUnits_ID', "\"DMU\"&[OBJECTID]")
+            arcpy.CalculateField_management(DMUTablePath, 'DescriptionOfMapUnits_ID', "\"DMU\"&[OBJECTID]") #TODO CHANGE TO PYTHON
 
         if isinstance(descriptionSourceID, unicode):
             arcpy.AddMessage("Assigning Source IDs...")
-            arcpy.CalculateField_management(DMUTablePath, 'DescriptionSourceID', "\"" + descriptionSourceID + "\"")
-
+            arcpy.CalculateField_management(DMUTablePath, 'DescriptionSourceID', "\"" + descriptionSourceID + "\"") #TODO CHANGE TO PYTHON
         arcpy.env.overwriteOutput = False
 
 

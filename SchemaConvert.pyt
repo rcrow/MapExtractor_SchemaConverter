@@ -372,7 +372,7 @@ class nullFields(object):
                     cannull = field.isNullable
                     if cannull:
                         arcpy.AddMessage("     >Nulling: " + field.name)
-                        arcpy.CalculateField_management(fc, field.name, "NULL")
+                        arcpy.CalculateField_management(fc, field.name, "NULL") #Convert from VB to Python
                     else:
                         arcpy.AddMessage("      Can't null: " + field.name)
         arcpy.env.overwriteOutput = False
@@ -444,9 +444,9 @@ class switchSymbolAndType(object):
                 arcpy.AddMessage("    Looking Through Feature Class: " + fc)
                 if fc in lisFCsToSwitch:
                     arcpy.AddMessage("      Switching Type to Symbol for: " + fc)
-                    arcpy.CalculateField_management(fc, "Symbol", "[Type]")
+                    arcpy.CalculateField_management(fc, "Symbol", "[Type]") #Convert from VB to Python
                     if nullType:
-                        arcpy.CalculateField_management(fc, "Type", "\"\"")
+                        arcpy.CalculateField_management(fc, "Type", "\"\"") #Convert from VB to Python
         return
 
 class geomorphUnitConverter(object):
@@ -777,7 +777,7 @@ class populateLabelFromFeatureLinks(object):
                     listLabels.append(row[1])
             fcPath = fds + "\\" + listFCs[i]
             if nullFirst:
-                arcpy.CalculateField_management(fcPath, "label", "NULL")
+                arcpy.CalculateField_management(fcPath, "label", "NULL") #Convert from VB to Python
             with arcpy.da.UpdateCursor(fcPath, FCfields) as editcursor:
                 for editrow in editcursor:
                     if editrow[0] in listFeatureIds:
@@ -1078,12 +1078,12 @@ class alacarteToGeMS(object):
                                     schema_type="NO_TEST",
                                     subtype="")
 
-        arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys",
+        arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys", #Convert from VB to Python
                                         field="MapUnit",
                                         expression="[PTYPE]", expression_type="VB",
                                         code_block="")
 
-        arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys",
+        arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys", #Convert from VB to Python
                                         field="Symbol",
                                         expression="[PTYPE]", expression_type="VB",
                                         code_block="")
@@ -1423,7 +1423,7 @@ class nbmgToGeMS(object):
         #MapUnitPolys
         arcpy.AddMessage("Adding the MapUnitPolys")
 
-        fieldmappings1 = makefieldmapping(gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys",["PTYPE", "Label"],MapUnitPolys,[mapunitfield, mapunitfield])
+        fieldmappings1 = makefieldmapping(gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys", ["PTYPE", "Label"],MapUnitPolys,[mapunitfield, mapunitfield])
 
         arcpy.Append_management(inputs=MapUnitPolys,
                                 target=gdbPath+"\\"+"GeologicMap"+"\\"+"MapUnitPolys",
@@ -1431,12 +1431,12 @@ class nbmgToGeMS(object):
                                 field_mapping=fieldmappings1,
                                 subtype="")
 
-        arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys",
+        arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys", #Convert from VB to Python
                                         field="MapUnit",
                                         expression="[PTYPE]", expression_type="VB",
                                         code_block="")
 
-        arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys",
+        arcpy.CalculateField_management(in_table=gdbPath + "\\" + "GeologicMap" + "\\" + "MapUnitPolys", #Convert from VB to Python
                                         field="Symbol",
                                         expression="[PTYPE]", expression_type="VB",
                                         code_block="")
